@@ -10,7 +10,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using NuGet.Common;
 using NuGet.Packaging.Signing;
-using NuGet.Test.Utility;
 using Test.Utility.Signing;
 using Xunit;
 

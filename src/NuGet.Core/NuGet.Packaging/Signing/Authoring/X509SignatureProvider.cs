@@ -2,10 +2,8 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
-using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Security.Cryptography.Pkcs;
-using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -128,8 +126,6 @@ namespace NuGet.Packaging.Signing
 #endif
         private static PrimarySignature CreatePrimarySignature(CmsSigner cmsSigner, SignPackageRequest request, byte[] signingData)
         {
-            Debugger.Launch();
-
             var contentInfo = new ContentInfo(signingData);
             var cms = new SignedCms(contentInfo);
 
