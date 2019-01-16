@@ -128,7 +128,6 @@ namespace Test.Utility.Signing
             return new TimestampService(certificateAuthority, certificate, issueCertificateOptions.KeyPair, uri, serviceOptions);
         }
 
-#if IS_DESKTOP
         public override void Respond(HttpListenerContext context)
         {
             if (context == null)
@@ -211,6 +210,5 @@ namespace Test.Utility.Signing
                 }
             }
         }
-#endif
     }
 }

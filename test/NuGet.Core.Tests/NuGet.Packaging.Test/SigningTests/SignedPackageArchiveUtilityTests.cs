@@ -256,7 +256,6 @@ namespace NuGet.Packaging.Test
             }
         }
 
-#if IS_DESKTOP
         [Fact]
         public async Task RemoveRepositorySignaturesAsync_WithNullInput_Throws()
         {
@@ -428,7 +427,6 @@ namespace NuGet.Packaging.Test
                 package2.SetValue((byte)0, offsetOfCentralDirectoryHeaderLastModifiedDateTime + i);
             }
         }
-#endif
 
         private static byte[] GetEmptyZip()
         {
@@ -498,7 +496,6 @@ namespace NuGet.Packaging.Test
             }
         }
 
-#if IS_DESKTOP
         private sealed class RemoveTest : IDisposable
         {
             private bool _isDisposed;
@@ -662,6 +659,5 @@ namespace NuGet.Packaging.Test
                 }
             }
         }
-#endif
     }
 }

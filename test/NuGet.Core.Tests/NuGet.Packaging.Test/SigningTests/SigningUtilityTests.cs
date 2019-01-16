@@ -6,9 +6,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
-#if IS_DESKTOP
 using System.Security.Cryptography.Pkcs;
-#endif
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
@@ -151,7 +149,6 @@ namespace NuGet.Packaging.Test
             }
         }
 
-#if IS_DESKTOP
         [Fact]
         public void CreateSignedAttributes_SignPackageRequest_WhenRequestNull_Throws()
         {
@@ -684,7 +681,6 @@ namespace NuGet.Packaging.Test
                     logger);
             }
         }
-#endif
 
         private static void AssertNotTimeValid(IEnumerable<ILogMessage> issues, LogLevel logLevel)
         {

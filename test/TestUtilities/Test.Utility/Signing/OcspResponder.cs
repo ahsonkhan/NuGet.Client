@@ -49,7 +49,6 @@ namespace Test.Utility.Signing
             return new OcspResponder(certificateAuthority, options);
         }
 
-#if IS_DESKTOP
         public override void Respond(HttpListenerContext context)
         {
             if (context == null)
@@ -136,7 +135,6 @@ namespace Test.Utility.Signing
 
             return null;
         }
-#endif
 
         public Task WaitForResponseExpirationAsync(X509Certificate certificate)
         {

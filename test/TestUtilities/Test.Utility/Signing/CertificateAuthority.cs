@@ -152,7 +152,6 @@ namespace Test.Utility.Signing
                 new RevocationInfo(certificate.SerialNumber, revocationDate, reason));
         }
 
-#if IS_DESKTOP
         public override void Respond(HttpListenerContext context)
         {
             if (context == null)
@@ -170,7 +169,6 @@ namespace Test.Utility.Signing
                 context.Response.StatusCode = 404;
             }
         }
-#endif
 
         public static CertificateAuthority Create(Uri sharedUri, IssueCertificateOptions options = null)
         {

@@ -2,16 +2,14 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Diagnostics;
 using System.Security.Cryptography;
+using System.Security.Cryptography.Pkcs;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using NuGet.Common;
-
-#if IS_DESKTOP
-using System.Security.Cryptography.Pkcs;
-using System.Security.Cryptography.X509Certificates;
-#endif
 
 namespace NuGet.Packaging.Signing
 {
@@ -97,40 +95,41 @@ namespace NuGet.Packaging.Signing
             }
         }
 
-#if IS_DESKTOP
         private static PrimarySignature CreatePrimarySignature(SignPackageRequest request, SignatureContent signatureContent, ILogger logger)
         {
             var cmsSigner = SigningUtility.CreateCmsSigner(request, logger);
-
+#if IS_DESKTOP
             if (request.PrivateKey != null)
             {
                 return CreatePrimarySignature(cmsSigner, signatureContent.GetBytes(), request.PrivateKey);
             }
-
+#endif
             return CreatePrimarySignature(cmsSigner, request, signatureContent.GetBytes());
         }
 
         private static PrimarySignature CreateRepositoryCountersignature(SignPackageRequest request, PrimarySignature primarySignature, ILogger logger)
         {
             var cmsSigner = SigningUtility.CreateCmsSigner(request, logger);
-
+#if IS_DESKTOP
             if (request.PrivateKey != null)
             {
                 return CreateRepositoryCountersignature(cmsSigner, primarySignature, request.PrivateKey);
             }
-
+#endif
             return CreateRepositoryCountersignature(cmsSigner, request, primarySignature);
         }
-
+#if IS_DESKTOP
         private static PrimarySignature CreatePrimarySignature(CmsSigner cmsSigner, byte[] signingData, CngKey privateKey)
         {
             var cms = NativeUtility.NativeSign(cmsSigner, signingData, privateKey);
 
             return PrimarySignature.Load(cms);
         }
-
+#endif
         private static PrimarySignature CreatePrimarySignature(CmsSigner cmsSigner, SignPackageRequest request, byte[] signingData)
         {
+            Debugger.Launch();
+
             var contentInfo = new ContentInfo(signingData);
             var cms = new SignedCms(contentInfo);
 
@@ -149,7 +148,7 @@ namespace NuGet.Packaging.Signing
 
             return PrimarySignature.Load(cms);
         }
-
+#if IS_DESKTOP
         private static PrimarySignature CreateRepositoryCountersignature(CmsSigner cmsSigner, PrimarySignature primarySignature, CngKey privateKey)
         {
             using (var primarySignatureNativeCms = NativeCms.Decode(primarySignature.GetBytes()))
@@ -164,7 +163,7 @@ namespace NuGet.Packaging.Signing
                 return PrimarySignature.Load(updatedCms);
             }
         }
-
+#endif
         private static PrimarySignature CreateRepositoryCountersignature(CmsSigner cmsSigner, SignPackageRequest request, PrimarySignature primarySignature)
         {
             var cms = new SignedCms();
@@ -216,27 +215,5 @@ namespace NuGet.Packaging.Signing
 
             return _timestampProvider.TimestampSignatureAsync(primarySignature, timestampRequest, logger, token);
         }
-
-#else
-        private static PrimarySignature CreatePrimarySignature(SignPackageRequest request, SignatureContent signatureContent, ILogger logger)
-        {
-            throw new NotSupportedException();
-        }
-
-        private Task<PrimarySignature> TimestampPrimarySignatureAsync(SignPackageRequest request, ILogger logger, PrimarySignature signature, CancellationToken token)
-        {
-            throw new NotSupportedException();
-        }
-
-        private static PrimarySignature CreateRepositoryCountersignature(SignPackageRequest request, PrimarySignature signature, ILogger logger)
-        {
-            throw new NotSupportedException();
-        }
-
-        private Task<PrimarySignature> TimestampRepositoryCountersignatureAsync(SignPackageRequest request, ILogger logger, PrimarySignature signature, CancellationToken token)
-        {
-            throw new NotSupportedException();
-        }
-#endif
     }
 }

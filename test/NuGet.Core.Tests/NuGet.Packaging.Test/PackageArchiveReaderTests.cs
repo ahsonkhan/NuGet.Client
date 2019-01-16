@@ -1519,7 +1519,6 @@ namespace NuGet.Packaging.Test
             }
         }
 
-#if IS_DESKTOP
         [Fact]
         public async Task ValidateIntegrityAsync_WhenSignatureContentNull_Throws()
         {
@@ -1757,7 +1756,6 @@ namespace NuGet.Packaging.Test
             }
         }
 
-#if IS_DESKTOP
         [CIOnlyFact]
         public async Task GetContentHash_IsSameForUnsignedAndSignedPackageAsync()
         {
@@ -1799,7 +1797,6 @@ namespace NuGet.Packaging.Test
                 }
             }
         }
-#endif 
 
         private static Zip CreateZipWithNestedStoredZipArchives()
         {
@@ -1866,7 +1863,6 @@ namespace NuGet.Packaging.Test
                 return stream.ToArray();
             }
         }
-#endif
 
         private static string ExtractFile(string sourcePath, string targetPath, Stream sourceStream)
         {

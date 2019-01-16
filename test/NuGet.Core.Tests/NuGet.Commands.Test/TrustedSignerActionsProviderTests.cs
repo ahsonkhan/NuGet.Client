@@ -5,9 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-#if IS_DESKTOP
 using System.Security.Cryptography.Pkcs;
-#endif
 using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
@@ -195,7 +193,6 @@ namespace NuGet.Commands.Test
                     SettingsTestUtils.DeepEquals(i.Certificates.First(), expectedCert))));
         }
 
-#if IS_DESKTOP
         [Fact]
         public async Task AddTrustedSignerAsync_WithNullPackage_ThrowsAsync()
         {
@@ -853,7 +850,6 @@ namespace NuGet.Commands.Test
                 }
             }
         }
-#endif
 
         [Theory]
         [InlineData(null)]

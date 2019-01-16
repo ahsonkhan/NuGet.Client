@@ -5,7 +5,7 @@
   <PropertyGroup>
     <TargetFrameworks>$(TargetFrameworksExe)</TargetFrameworks>
     <TargetFrameworks Condition=" '$(IsXPlat)' == 'true' ">$(NETCoreTargetFramework)</TargetFrameworks>
-    <TestProject>true</TestProject>
+    <IsTestProject>true</IsTestProject>
     <UseParallelXunit>true</UseParallelXunit>
   </PropertyGroup>
 
