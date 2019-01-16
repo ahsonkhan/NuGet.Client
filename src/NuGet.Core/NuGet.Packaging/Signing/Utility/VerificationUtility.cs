@@ -95,7 +95,6 @@ namespace NuGet.Packaging.Signing
             return validationFlags;
         }
 
-#if IS_DESKTOP
         internal static SignatureVerificationStatusFlags ValidateTimestamp(Timestamp timestamp, Signature signature, bool treatIssuesAsErrors, List<SignatureLog> issues, SigningSpecifications spec)
         {
             if (timestamp == null)
@@ -187,6 +186,5 @@ namespace NuGet.Packaging.Signing
 
             return validationFlags;
         }
-#endif
     }
 }

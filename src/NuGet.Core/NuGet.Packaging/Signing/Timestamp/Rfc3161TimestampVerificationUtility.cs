@@ -3,11 +3,7 @@
 
 using System;
 using System.IO;
-
-#if IS_DESKTOP
 using System.Security.Cryptography.Pkcs;
-#endif
-
 using System.Security.Cryptography.X509Certificates;
 
 namespace NuGet.Packaging.Signing
@@ -18,8 +14,6 @@ namespace NuGet.Packaging.Signing
     internal static class Rfc3161TimestampVerificationUtility
     {
         private const double _millisecondsPerMicrosecond = 0.001;
-
-#if IS_DESKTOP
 
         internal static bool ValidateSignerCertificateAgainstTimestamp(
             X509Certificate2 signerCertificate,
@@ -73,6 +67,5 @@ namespace NuGet.Packaging.Signing
 
             return accuracyInMilliseconds;
         }
-#endif
     }
 }
