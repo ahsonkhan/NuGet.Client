@@ -35,7 +35,7 @@ namespace NuGet.Packaging.FuncTest
             _trustProviders = _testFixture.TrustProviders;
             _signingSpecifications = _testFixture.SigningSpecifications;
         }
-
+#if IS_DESKTOP
         [CIOnlyFact]
         public async Task Signature_HasTimestampAsync()
         {
@@ -64,7 +64,7 @@ namespace NuGet.Packaging.FuncTest
                 }
             }
         }
-
+#endif
         [CIOnlyFact]
         public async Task Signature_HasNoTimestampAsync()
         {

@@ -141,7 +141,7 @@ namespace NuGet.Packaging.FuncTest
             Assert.Contains(issues, issue =>
                 issue.Code == NuGetLogCode.NU3018 &&
                 issue.Level == logLevel &&
-                issue.Message.Contains("The primary signature found a chain building issue: A certificate chain processed, but terminated in a root certificate which is not trusted by the trust provider."));
+                issue.Message.Contains("The primary signature found a chain building issue: A certificate chain processed, but terminated in a root certificate which is not trusted by the trust provider"));
         }
 
         private sealed class VerifyTest : IDisposable

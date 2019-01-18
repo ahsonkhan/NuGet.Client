@@ -25,7 +25,7 @@ namespace NuGet.Packaging.FuncTest
     [Collection(SigningTestCollection.Name)]
     public class SignatureTrustAndValidityVerificationProviderTests
     {
-        private const string _untrustedChainCertError = "A certificate chain processed, but terminated in a root certificate which is not trusted by the trust provider.";
+        private const string _untrustedChainCertError = "A certificate chain processed, but terminated in a root certificate which is not trusted by the trust provider";
         private readonly SignedPackageVerifierSettings _verifyCommandSettings = SignedPackageVerifierSettings.GetVerifyCommandDefaultPolicy();
         private readonly SignedPackageVerifierSettings _vsClientAcceptModeSettings = SignedPackageVerifierSettings.GetAcceptModeDefaultPolicy();
         private readonly SignedPackageVerifierSettings _defaultSettings = SignedPackageVerifierSettings.GetDefault();
@@ -68,7 +68,7 @@ namespace NuGet.Packaging.FuncTest
                 }
             }
         }
-
+#if IS_DESKTOP
         [CIOnlyFact]
         public async Task VerifySignaturesAsync_ValidCertificateAndTimestamp_SuccessAsync()
         {
@@ -97,9 +97,36 @@ namespace NuGet.Packaging.FuncTest
                 }
             }
         }
-
+#endif
         [CIOnlyFact]
         public async Task VerifySignaturesAsync_ValidCertificateAndTimestampWithDifferentHashAlgorithms_SuccessAsync()
+        {
+            var packageContext = new SimpleTestPackageContext();
+
+            using (var directory = TestDirectory.Create())
+            using (var certificate = new X509Certificate2(_trustedTestCert.Source.Cert))
+            {
+                var signedPackagePath = await SignedArchiveTestUtility.AuthorSignPackageAsync(
+                    certificate,
+                    packageContext,
+                    directory,
+                    signatureHashAlgorithm: HashAlgorithmName.SHA512);
+
+                var verifier = new PackageSignatureVerifier(_trustProviders);
+                using (var packageReader = new PackageArchiveReader(signedPackagePath))
+                {
+                    var result = await verifier.VerifySignaturesAsync(packageReader, _verifyCommandSettings, CancellationToken.None);
+                    var resultsWithErrors = result.Results.Where(r => r.GetErrorIssues().Any());
+
+                    result.IsValid.Should().BeTrue();
+                    resultsWithErrors.Count().Should().Be(0);
+                }
+            }
+        }
+
+#if IS_DESKTOP
+        [CIOnlyFact]
+        public async Task VerifySignaturesAsync_ValidCertificateAndTimestampWithDifferentHashAlgorithms_Timestamped_SuccessAsync()
         {
             var packageContext = new SimpleTestPackageContext();
             var timestampService = await _testFixture.GetDefaultTrustedTimestampServiceAsync();
@@ -142,10 +169,10 @@ namespace NuGet.Packaging.FuncTest
             };
             var bcCertificate = ca.IssueCertificate(issueOptions);
 
-            using (var certificate = new X509Certificate2(bcCertificate.GetEncoded()))
+            using (var temp = new X509Certificate2(bcCertificate.GetEncoded()))
+            using (var certificate = temp.CopyWithPrivateKey(DotNetUtilities.ToRSA(keyPair.Private as RsaPrivateCrtKeyParameters)))
             using (var directory = TestDirectory.Create())
             {
-                certificate.PrivateKey = DotNetUtilities.ToRSA(keyPair.Private as RsaPrivateCrtKeyParameters);
                 var notAfter = certificate.NotAfter.ToUniversalTime();
 
                 var packageContext = new SimpleTestPackageContext();
@@ -198,11 +225,10 @@ namespace NuGet.Packaging.FuncTest
             var bcCertificate = ca.IssueCertificate(issueOptions);
 
             using (testServer.RegisterResponder(timestampService))
-            using (var certificate = new X509Certificate2(bcCertificate.GetEncoded()))
+            using (var temp = new X509Certificate2(bcCertificate.GetEncoded()))
+            using (var certificate = temp.CopyWithPrivateKey(DotNetUtilities.ToRSA(keyPair.Private as RsaPrivateCrtKeyParameters)))
             using (var directory = TestDirectory.Create())
             {
-                certificate.PrivateKey = DotNetUtilities.ToRSA(keyPair.Private as RsaPrivateCrtKeyParameters);
-
                 var packageContext = new SimpleTestPackageContext();
                 var signedPackagePath = await SignedArchiveTestUtility.AuthorSignPackageAsync(
                     certificate,
@@ -239,7 +265,7 @@ namespace NuGet.Packaging.FuncTest
                 }
             }
         }
-
+#endif
         // Verify a package meeting minimum signature requirements.
         // This signature is neither an author nor repository signature.
         [CIOnlyFact]
@@ -336,6 +362,50 @@ namespace NuGet.Packaging.FuncTest
         {
             // Arrange
             var nupkg = new SimpleTestPackageContext();
+            var settings = new SignedPackageVerifierSettings(
+                allowUnsigned: false,
+                allowIllegal: false,
+                allowUntrusted: false,
+                allowIgnoreTimestamp: true,
+                allowMultipleTimestamps: true,
+                allowNoTimestamp: true,
+                allowUnknownRevocation: true,
+                reportUnknownRevocation: true,
+                verificationTarget: VerificationTarget.All,
+                signaturePlacement: SignaturePlacement.Any,
+                repositoryCountersignatureVerificationBehavior: SignatureVerificationBehavior.IfExistsAndIsNecessary,
+                revocationMode: RevocationMode.Online);
+
+            using (var dir = TestDirectory.Create())
+            using (var testCertificate = new X509Certificate2(_trustedTestCert.Source.Cert))
+            using (var repoTestCertificate = new X509Certificate2(_untrustedTestCertificate.Cert))
+            {
+                var signedPackagePath = await SignedArchiveTestUtility.AuthorSignPackageAsync(
+                    testCertificate,
+                    nupkg,
+                    dir);
+
+                var countersignedPackagePath = await SignedArchiveTestUtility.RepositorySignPackageAsync(repoTestCertificate, signedPackagePath, dir, new Uri("https://v3serviceIndex.test/api/index.json"));
+
+                var verifier = new PackageSignatureVerifier(_trustProviders);
+                using (var packageReader = new PackageArchiveReader(countersignedPackagePath))
+                {
+                    // Act
+                    var result = await verifier.VerifySignaturesAsync(packageReader, settings, CancellationToken.None);
+                    var resultsWithErrors = result.Results.Where(r => r.GetErrorIssues().Any());
+
+                    // Assert
+                    result.IsValid.Should().BeTrue();
+                    resultsWithErrors.Count().Should().Be(0);
+                }
+            }
+        }
+#if IS_DESKTOP
+        [CIOnlyFact]
+        public async Task VerifySignaturesAsync_SettingsNotRequireCheckCountersignature_WithValidPrimarySignatureAndInvalidCountersignature_Timestamped_SucceedsAsync()
+        {
+            // Arrange
+            var nupkg = new SimpleTestPackageContext();
             var timestampService = await _testFixture.GetDefaultTrustedTimestampServiceAsync();
             var settings = new SignedPackageVerifierSettings(
                 allowUnsigned: false,
@@ -378,7 +448,7 @@ namespace NuGet.Packaging.FuncTest
         }
 
         [CIOnlyFact]
-        public async Task VerifySignaturesAsync_SettingsRequireCheckCountersignature_WithValidPrimarySignatureAndInvalidCountersignature_FailsAsync()
+        public async Task VerifySignaturesAsync_SettingsRequireCheckCountersignature_WithValidPrimarySignatureAndInvalidCountersignature_Timestamped_FailsAsync()
         {
             // Arrange
             var nupkg = new SimpleTestPackageContext();
@@ -422,9 +492,96 @@ namespace NuGet.Packaging.FuncTest
                 }
             }
         }
+#endif
+        [CIOnlyFact]
+        public async Task VerifySignaturesAsync_SettingsRequireCheckCountersignature_WithValidPrimarySignatureAndInvalidCountersignature_FailsAsync()
+        {
+            // Arrange
+            var nupkg = new SimpleTestPackageContext();
+            var settings = new SignedPackageVerifierSettings(
+                allowUnsigned: false,
+                allowIllegal: false,
+                allowUntrusted: false,
+                allowIgnoreTimestamp: true,
+                allowMultipleTimestamps: true,
+                allowNoTimestamp: true,
+                allowUnknownRevocation: true,
+                reportUnknownRevocation: true,
+                verificationTarget: VerificationTarget.All,
+                signaturePlacement: SignaturePlacement.Any,
+                repositoryCountersignatureVerificationBehavior: SignatureVerificationBehavior.IfExists,
+                revocationMode: RevocationMode.Online);
 
+            using (var dir = TestDirectory.Create())
+            using (var testCertificate = new X509Certificate2(_trustedTestCert.Source.Cert))
+            using (var repoTestCertificate = new X509Certificate2(_untrustedTestCertificate.Cert))
+            {
+                var signedPackagePath = await SignedArchiveTestUtility.AuthorSignPackageAsync(
+                    testCertificate,
+                    nupkg,
+                    dir);
+
+                var countersignedPackagePath = await SignedArchiveTestUtility.RepositorySignPackageAsync(repoTestCertificate, signedPackagePath, dir, new Uri("https://v3serviceIndex.test/api/index.json"));
+
+                var verifier = new PackageSignatureVerifier(_trustProviders);
+                using (var packageReader = new PackageArchiveReader(countersignedPackagePath))
+                {
+                    // Act
+                    var result = await verifier.VerifySignaturesAsync(packageReader, settings, CancellationToken.None);
+                    var resultsWithErrors = result.Results.Where(r => r.GetErrorIssues().Any());
+
+                    // Assert
+                    result.IsValid.Should().BeFalse();
+                    resultsWithErrors.Count().Should().Be(1);
+                }
+            }
+        }
         [CIOnlyFact]
         public async Task VerifySignaturesAsync_SettingsRequireCheckCountersignature_WithValidPrimarySignatureAndValidCountersignature_SucceedsAsync()
+        {
+            // Arrange
+            var nupkg = new SimpleTestPackageContext();
+            var settings = new SignedPackageVerifierSettings(
+                allowUnsigned: false,
+                allowIllegal: false,
+                allowUntrusted: false,
+                allowIgnoreTimestamp: true,
+                allowMultipleTimestamps: true,
+                allowNoTimestamp: true,
+                allowUnknownRevocation: true,
+                reportUnknownRevocation: true,
+                verificationTarget: VerificationTarget.All,
+                signaturePlacement: SignaturePlacement.Any,
+                repositoryCountersignatureVerificationBehavior: SignatureVerificationBehavior.IfExistsAndIsNecessary,
+                revocationMode: RevocationMode.Online);
+
+            using (var dir = TestDirectory.Create())
+            using (var testCertificate = new X509Certificate2(_trustedTestCert.Source.Cert))
+            using (var repoTestCertificate = new X509Certificate2(_trustedTestCert.Source.Cert))
+            {
+                var signedPackagePath = await SignedArchiveTestUtility.AuthorSignPackageAsync(
+                    testCertificate,
+                    nupkg,
+                    dir);
+
+                var countersignedPackagePath = await SignedArchiveTestUtility.RepositorySignPackageAsync(repoTestCertificate, signedPackagePath, dir, new Uri("https://v3serviceIndex.test/api/index.json"));
+
+                var verifier = new PackageSignatureVerifier(_trustProviders);
+                using (var packageReader = new PackageArchiveReader(countersignedPackagePath))
+                {
+                    // Act
+                    var result = await verifier.VerifySignaturesAsync(packageReader, settings, CancellationToken.None);
+                    var resultsWithErrors = result.Results.Where(r => r.GetErrorIssues().Any());
+
+                    // Assert
+                    result.IsValid.Should().BeTrue();
+                    resultsWithErrors.Count().Should().Be(0);
+                }
+            }
+        }
+#if IS_DESKTOP
+        [CIOnlyFact]
+        public async Task VerifySignaturesAsync_SettingsRequireCheckCountersignature_WithValidPrimarySignatureAndValidCountersignature_Timestamped_SucceedsAsync()
         {
             // Arrange
             var nupkg = new SimpleTestPackageContext();
@@ -615,7 +772,7 @@ namespace NuGet.Packaging.FuncTest
         }
 
         [CIOnlyFact]
-        public async Task GetTrustResultAsync_WithInvalidSignature_ThrowsAsync()
+        public async Task GetTrustResultAsync_WithInvalidSignature_Timestamped_ThrowsAsync()
         {
             var package = new SimpleTestPackageContext();
             var timestampService = await _testFixture.GetDefaultTrustedTimestampServiceAsync();
@@ -648,7 +805,41 @@ namespace NuGet.Packaging.FuncTest
                 }
             }
         }
+#endif
 
+        [CIOnlyFact]
+        public async Task GetTrustResultAsync_WithInvalidSignature_ThrowsAsync()
+        {
+            var package = new SimpleTestPackageContext();
+
+            using (var directory = TestDirectory.Create())
+            using (var testCertificate = new X509Certificate2(_trustedTestCert.Source.Cert))
+            {
+                var packageFilePath = await SignedArchiveTestUtility.AuthorSignPackageAsync(
+                    testCertificate,
+                    package,
+                    directory);
+
+                using (var packageReader = new PackageArchiveReader(packageFilePath))
+                {
+                    var signature = await packageReader.GetPrimarySignatureAsync(CancellationToken.None);
+                    var invalidSignature = SignatureTestUtility.GenerateInvalidPrimarySignature(signature);
+                    var provider = new SignatureTrustAndValidityVerificationProvider();
+
+                    var result = await provider.GetTrustResultAsync(
+                        packageReader,
+                        invalidSignature,
+                        _defaultSettings,
+                        CancellationToken.None);
+
+                    var issue = result.Issues.FirstOrDefault(log => log.Code == NuGetLogCode.NU3012);
+
+                    Assert.NotNull(issue);
+                    Assert.Contains("validation failed.", issue.Message);
+                }
+            }
+        }
+#if IS_DESKTOP
         [CIOnlyFact]
         public async Task GetTrustResultAsync_SettingsRequireExactlyOneTimestamp_MultipleTimestamps_FailsAsync()
         {
@@ -693,7 +884,7 @@ namespace NuGet.Packaging.FuncTest
                 totalErrorIssues.First().Code.Should().Be(NuGetLogCode.NU3000);
             }
         }
-
+#endif
         [CIOnlyFact]
         public async Task GetTrustResultAsync_WithSignedAndCountersignedPackage_SucceedsAsync()
         {
@@ -729,7 +920,7 @@ namespace NuGet.Packaging.FuncTest
                 }
             }
         }
-
+#if IS_DESKTOP
         [CIOnlyFact]
         public async Task GetTrustResultAsync_WithSignedTimestampedCountersignedAndCountersignatureTimestampedPackage_SucceedsAsync()
         {
@@ -788,7 +979,7 @@ namespace NuGet.Packaging.FuncTest
         }
 
         [CIOnlyFact]
-        public async Task GetTrustResultAsync_PrimarySignatureWithUntrustedRoot_EmptyAllowedUntrustedRootList_AllowUntrustedFalse_ErrorAsync()
+        public async Task GetTrustResultAsync_PrimarySignatureWithUntrustedRoot_EmptyAllowedUntrustedRootList_AllowUntrustedFalse_Timestamped_ErrorAsync()
         {
             var settings = new SignedPackageVerifierSettings(
                               allowUnsigned: false,
@@ -822,9 +1013,76 @@ namespace NuGet.Packaging.FuncTest
                     .Any(i => i.Message.Contains(_untrustedChainCertError)));
             }
         }
+#endif
+        [CIOnlyFact]
+        public async Task GetTrustResultAsync_PrimarySignatureWithUntrustedRoot_EmptyAllowedUntrustedRootList_AllowUntrustedFalse_ErrorAsync()
+        {
+            var settings = new SignedPackageVerifierSettings(
+                              allowUnsigned: false,
+                              allowIllegal: false,
+                              allowUntrusted: false,
+                              allowIgnoreTimestamp: false,
+                              allowMultipleTimestamps: false,
+                              allowNoTimestamp: true,
+                              allowUnknownRevocation: true,
+                              reportUnknownRevocation: true,
+                              verificationTarget: VerificationTarget.Repository,
+                              signaturePlacement: SignaturePlacement.PrimarySignature,
+                              repositoryCountersignatureVerificationBehavior: SignatureVerificationBehavior.Never,
+                              revocationMode: RevocationMode.Online);
+
+            using (var test = await Test.CreateRepositoryPrimarySignedPackageAsync(
+                _testFixture.UntrustedTestCertificate.Cert))
+            using (var packageReader = new PackageArchiveReader(test.PackageFile.FullName))
+            {
+                var primarySignature = await packageReader.GetPrimarySignatureAsync(CancellationToken.None);
+
+                var provider = new SignatureTrustAndValidityVerificationProvider(allowUntrustedRootList: null);
+
+                var status = await provider.GetTrustResultAsync(packageReader, primarySignature, settings, CancellationToken.None);
+
+                Assert.Equal(SignatureVerificationStatus.Disallowed, status.Trust);
+                Assert.True(status.Issues.Where(i => i.Level == Common.LogLevel.Error)
+                    .Any(i => i.Message.Contains(_untrustedChainCertError)));
+            }
+        }
 
         [CIOnlyFact]
         public async Task GetTrustResultAsync_RepositoryCountersignatureWithUntrustedRoot_EmptyAllowedUntrustedRootList_AllowUntrustedFalse_ErrorAsync()
+        {
+            var settings = new SignedPackageVerifierSettings(
+                       allowUnsigned: false,
+                       allowIllegal: false,
+                       allowUntrusted: false,
+                       allowIgnoreTimestamp: false,
+                       allowMultipleTimestamps: false,
+                       allowNoTimestamp: true,
+                       allowUnknownRevocation: true,
+                       reportUnknownRevocation: true,
+                       verificationTarget: VerificationTarget.Repository,
+                       signaturePlacement: SignaturePlacement.Countersignature,
+                       repositoryCountersignatureVerificationBehavior: SignatureVerificationBehavior.Always,
+                       revocationMode: RevocationMode.Online);
+
+            using (var test = await Test.CreateAuthorSignedRepositoryCountersignedPackageAsync(
+                _testFixture.TrustedTestCertificate.Source.Cert,
+                _testFixture.UntrustedTestCertificate.Cert))
+            using (var packageReader = new PackageArchiveReader(test.PackageFile.FullName))
+            {
+                var primarySignature = await packageReader.GetPrimarySignatureAsync(CancellationToken.None);
+
+                var provider = new SignatureTrustAndValidityVerificationProvider(allowUntrustedRootList: null);
+
+                var status = await provider.GetTrustResultAsync(packageReader, primarySignature, settings, CancellationToken.None);
+
+                Assert.Equal(SignatureVerificationStatus.Disallowed, status.Trust);
+                Assert.True(status.Issues.Where(i => i.Level == Common.LogLevel.Error)
+                    .Any(i => i.Message.Contains(_untrustedChainCertError)));
+            }
+        }
+#if IS_DESKTOP
+        [CIOnlyFact]
+        public async Task GetTrustResultAsync_RepositoryCountersignatureWithUntrustedRoot_EmptyAllowedUntrustedRootList_AllowUntrustedFalse_Timestamped_ErrorAsync()
         {
             var settings = new SignedPackageVerifierSettings(
                        allowUnsigned: false,
@@ -862,7 +1120,7 @@ namespace NuGet.Packaging.FuncTest
         }
 
         [CIOnlyFact]
-        public async Task GetTrustResultAsync_PrimarySignatureWithUntrustedRoot_NotInAllowedUntrustedRootList_AllowUntrustedFalse_ErrorAsync()
+        public async Task GetTrustResultAsync_PrimarySignatureWithUntrustedRoot_NotInAllowedUntrustedRootList_AllowUntrustedFalse_Timestamped_ErrorAsync()
         {
             var settings = new SignedPackageVerifierSettings(
                   allowUnsigned: false,
@@ -897,9 +1155,80 @@ namespace NuGet.Packaging.FuncTest
                     .Any(i => i.Message.Contains(_untrustedChainCertError)));
             }
         }
+#endif
+
+        [CIOnlyFact]
+        public async Task GetTrustResultAsync_PrimarySignatureWithUntrustedRoot_NotInAllowedUntrustedRootList_AllowUntrustedFalse_ErrorAsync()
+        {
+            var settings = new SignedPackageVerifierSettings(
+                  allowUnsigned: false,
+                  allowIllegal: false,
+                  allowUntrusted: false,
+                  allowIgnoreTimestamp: false,
+                  allowMultipleTimestamps: false,
+                  allowNoTimestamp: true,
+                  allowUnknownRevocation: true,
+                  reportUnknownRevocation: true,
+                  verificationTarget: VerificationTarget.Repository,
+                  signaturePlacement: SignaturePlacement.PrimarySignature,
+                  repositoryCountersignatureVerificationBehavior: SignatureVerificationBehavior.Never,
+                  revocationMode: RevocationMode.Online);
+
+            using (var test = await Test.CreateRepositoryPrimarySignedPackageAsync(
+                _testFixture.UntrustedTestCertificate.Cert))
+            using (var packageReader = new PackageArchiveReader(test.PackageFile.FullName))
+            {
+                var primarySignature = await packageReader.GetPrimarySignatureAsync(CancellationToken.None);
+
+                var provider = new SignatureTrustAndValidityVerificationProvider(allowUntrustedRootList:
+                    new List<KeyValuePair<string, HashAlgorithmName>>() { new KeyValuePair<string, HashAlgorithmName>("abc", HashAlgorithmName.SHA256) });
+
+                var status = await provider.GetTrustResultAsync(packageReader, primarySignature, settings, CancellationToken.None);
+
+                Assert.Equal(SignatureVerificationStatus.Disallowed, status.Trust);
+                Assert.True(status.Issues.Where(i => i.Level == Common.LogLevel.Error)
+                    .Any(i => i.Message.Contains(_untrustedChainCertError)));
+            }
+        }
 
         [CIOnlyFact]
         public async Task GetTrustResultAsync_RepositoryCountersignatureWithUntrustedRoot_NotInAllowedUntrustedRootList_AllowUntrustedFalse_ErrorAsync()
+        {
+            var settings = new SignedPackageVerifierSettings(
+             allowUnsigned: false,
+             allowIllegal: false,
+             allowUntrusted: false,
+             allowIgnoreTimestamp: false,
+             allowMultipleTimestamps: false,
+             allowNoTimestamp: true,
+             allowUnknownRevocation: true,
+             reportUnknownRevocation: true,
+             verificationTarget: VerificationTarget.Repository,
+             signaturePlacement: SignaturePlacement.Countersignature,
+             repositoryCountersignatureVerificationBehavior: SignatureVerificationBehavior.Always,
+             revocationMode: RevocationMode.Online);
+
+            using (var test = await Test.CreateAuthorSignedRepositoryCountersignedPackageAsync(
+                _testFixture.TrustedTestCertificate.Source.Cert,
+                _testFixture.UntrustedTestCertificate.Cert))
+            using (var packageReader = new PackageArchiveReader(test.PackageFile.FullName))
+            {
+                var primarySignature = await packageReader.GetPrimarySignatureAsync(CancellationToken.None);
+
+                var provider = new SignatureTrustAndValidityVerificationProvider(allowUntrustedRootList:
+                    new List<KeyValuePair<string, HashAlgorithmName>>() { new KeyValuePair<string, HashAlgorithmName>("abc", HashAlgorithmName.SHA256) });
+
+                var status = await provider.GetTrustResultAsync(packageReader, primarySignature, settings, CancellationToken.None);
+
+                Assert.Equal(SignatureVerificationStatus.Disallowed, status.Trust);
+                Assert.True(status.Issues.Where(i => i.Level == Common.LogLevel.Error)
+                    .Any(i => i.Message.Contains(_untrustedChainCertError)));
+            }
+        }
+
+#if IS_DESKTOP
+        [CIOnlyFact]
+        public async Task GetTrustResultAsync_RepositoryCountersignatureWithUntrustedRoot_NotInAllowedUntrustedRootList_AllowUntrustedFalse_Timestamped_ErrorAsync()
         {
             var settings = new SignedPackageVerifierSettings(
              allowUnsigned: false,
@@ -936,9 +1265,46 @@ namespace NuGet.Packaging.FuncTest
                     .Any(i => i.Message.Contains(_untrustedChainCertError)));
             }
         }
+#endif
 
         [CIOnlyFact]
         public async Task GetTrustResultAsync_PrimarySignatureWithUntrustedRoot_InAllowedUntrustedRootList_AllowUntrustedFalse_SucceedsAsync()
+        {
+            var settings = new SignedPackageVerifierSettings(
+           allowUnsigned: false,
+           allowIllegal: false,
+           allowUntrusted: false,
+           allowIgnoreTimestamp: false,
+           allowMultipleTimestamps: false,
+           allowNoTimestamp: true,
+           allowUnknownRevocation: true,
+           reportUnknownRevocation: true,
+           verificationTarget: VerificationTarget.Repository,
+           signaturePlacement: SignaturePlacement.PrimarySignature,
+           repositoryCountersignatureVerificationBehavior: SignatureVerificationBehavior.Never,
+           revocationMode: RevocationMode.Online);
+
+            var untrustedCertFingerprint = SignatureTestUtility.GetFingerprint(_testFixture.UntrustedTestCertificate.Cert, HashAlgorithmName.SHA256);
+
+            using (var test = await Test.CreateRepositoryPrimarySignedPackageAsync(
+                _testFixture.UntrustedTestCertificate.Cert))
+            using (var packageReader = new PackageArchiveReader(test.PackageFile.FullName))
+            {
+                var primarySignature = await packageReader.GetPrimarySignatureAsync(CancellationToken.None);
+
+                var provider = new SignatureTrustAndValidityVerificationProvider(allowUntrustedRootList:
+                    new List<KeyValuePair<string, HashAlgorithmName>>() { new KeyValuePair<string, HashAlgorithmName>(untrustedCertFingerprint, HashAlgorithmName.SHA256) });
+
+                var status = await provider.GetTrustResultAsync(packageReader, primarySignature, settings, CancellationToken.None);
+
+                Assert.Equal(SignatureVerificationStatus.Valid, status.Trust);
+                Assert.False(status.Issues.Where(i => i.Level >= Common.LogLevel.Warning)
+                    .Any(i => i.Message.Contains(_untrustedChainCertError)));
+            }
+        }
+#if IS_DESKTOP
+        [CIOnlyFact]
+        public async Task GetTrustResultAsync_PrimarySignatureWithUntrustedRoot_InAllowedUntrustedRootList_AllowUntrustedFalse_Timestamped_SucceedsAsync()
         {
             var settings = new SignedPackageVerifierSettings(
            allowUnsigned: false,
@@ -976,7 +1342,7 @@ namespace NuGet.Packaging.FuncTest
         }
 
         [CIOnlyFact]
-        public async Task GetTrustResultAsync_RepositoryCountersignatureWithUntrustedRoot_InAllowedUntrustedRootList_AllowUntrustedFalse_SucceedsAsync()
+        public async Task GetTrustResultAsync_RepositoryCountersignatureWithUntrustedRoot_InAllowedUntrustedRootList_AllowUntrustedFalse_Timestamped_SucceedsAsync()
         {
             var settings = new SignedPackageVerifierSettings(
                allowUnsigned: false,
@@ -1000,6 +1366,44 @@ namespace NuGet.Packaging.FuncTest
                 _testFixture.UntrustedTestCertificate.Cert,
                 timestampService.Url,
                 timestampService.Url))
+            using (var packageReader = new PackageArchiveReader(test.PackageFile.FullName))
+            {
+                var primarySignature = await packageReader.GetPrimarySignatureAsync(CancellationToken.None);
+
+                var provider = new SignatureTrustAndValidityVerificationProvider(allowUntrustedRootList:
+                    new List<KeyValuePair<string, HashAlgorithmName>>() { new KeyValuePair<string, HashAlgorithmName>(untrustedCertFingerprint, HashAlgorithmName.SHA256) });
+
+                var status = await provider.GetTrustResultAsync(packageReader, primarySignature, settings, CancellationToken.None);
+
+                Assert.Equal(SignatureVerificationStatus.Valid, status.Trust);
+                Assert.False(status.Issues.Where(i => i.Level >= Common.LogLevel.Warning)
+                    .Any(i => i.Message.Contains(_untrustedChainCertError)));
+            }
+        }
+#endif
+
+        [CIOnlyFact]
+        public async Task GetTrustResultAsync_RepositoryCountersignatureWithUntrustedRoot_InAllowedUntrustedRootList_AllowUntrustedFalse_SucceedsAsync()
+        {
+            var settings = new SignedPackageVerifierSettings(
+               allowUnsigned: false,
+               allowIllegal: false,
+               allowUntrusted: false,
+               allowIgnoreTimestamp: false,
+               allowMultipleTimestamps: false,
+               allowNoTimestamp: true,
+               allowUnknownRevocation: true,
+               reportUnknownRevocation: true,
+               verificationTarget: VerificationTarget.Repository,
+               signaturePlacement: SignaturePlacement.Countersignature,
+               repositoryCountersignatureVerificationBehavior: SignatureVerificationBehavior.Always,
+               revocationMode: RevocationMode.Online);
+
+            var untrustedCertFingerprint = SignatureTestUtility.GetFingerprint(_testFixture.UntrustedTestCertificate.Cert, HashAlgorithmName.SHA256);
+
+            using (var test = await Test.CreateAuthorSignedRepositoryCountersignedPackageAsync(
+                _testFixture.TrustedTestCertificate.Source.Cert,
+                _testFixture.UntrustedTestCertificate.Cert))
             using (var packageReader = new PackageArchiveReader(test.PackageFile.FullName))
             {
                 var primarySignature = await packageReader.GetPrimarySignatureAsync(CancellationToken.None);
@@ -1252,9 +1656,9 @@ namespace NuGet.Packaging.FuncTest
                     Assert.Equal(SignatureVerificationStatus.Unknown, result.Trust);
                 }
             }
-
+#if IS_DESKTOP
             [CIOnlyFact]
-            public async Task GetTrustResultAsync_WithValidSignature_ReturnsValidAsync()
+            public async Task GetTrustResultAsync_WithValidSignature_Timestamped_ReturnsValidAsync()
             {
                 var settings = new SignedPackageVerifierSettings(
                     allowUnsigned: false,
@@ -1274,6 +1678,35 @@ namespace NuGet.Packaging.FuncTest
                 using (var test = await Test.CreateAuthorSignedPackageAsync(
                     _fixture.TrustedTestCertificate.Source.Cert,
                     timestampService.Url))
+                using (var packageReader = new PackageArchiveReader(test.PackageFile.FullName))
+                {
+                    var primarySignature = await packageReader.GetPrimarySignatureAsync(CancellationToken.None);
+
+                    var status = await _provider.GetTrustResultAsync(packageReader, primarySignature, settings, CancellationToken.None);
+
+                    Assert.Equal(SignatureVerificationStatus.Valid, status.Trust);
+                }
+            }
+#endif
+            [CIOnlyFact]
+            public async Task GetTrustResultAsync_WithValidSignature_ReturnsValidAsync()
+            {
+                var settings = new SignedPackageVerifierSettings(
+                    allowUnsigned: false,
+                    allowIllegal: false,
+                    allowUntrusted: false,
+                    allowIgnoreTimestamp: false,
+                    allowMultipleTimestamps: false,
+                    allowNoTimestamp: true,
+                    allowUnknownRevocation: true,
+                    reportUnknownRevocation: true,
+                    verificationTarget: VerificationTarget.Author,
+                    signaturePlacement: SignaturePlacement.PrimarySignature,
+                    repositoryCountersignatureVerificationBehavior: SignatureVerificationBehavior.Never,
+                    revocationMode: RevocationMode.Online);
+
+                using (var test = await Test.CreateAuthorSignedPackageAsync(
+                    _fixture.TrustedTestCertificate.Source.Cert))
                 using (var packageReader = new PackageArchiveReader(test.PackageFile.FullName))
                 {
                     var primarySignature = await packageReader.GetPrimarySignatureAsync(CancellationToken.None);
@@ -1315,11 +1748,44 @@ namespace NuGet.Packaging.FuncTest
                     Assert.Equal(expectedStatus, status.Trust);
                 }
             }
-
             [CIOnlyTheory]
             [InlineData(true, SignatureVerificationStatus.Valid)]
             [InlineData(false, SignatureVerificationStatus.Disallowed)]
             public async Task GetTrustResultAsync_WithUntrustedSignature_ReturnsStatusAsync(
+               bool allowUntrusted,
+               SignatureVerificationStatus expectedStatus)
+            {
+                var settings = new SignedPackageVerifierSettings(
+                    allowUnsigned: false,
+                    allowIllegal: false,
+                    allowUntrusted: allowUntrusted,
+                    allowIgnoreTimestamp: false,
+                    allowMultipleTimestamps: false,
+                    allowNoTimestamp: true,
+                    allowUnknownRevocation: true,
+                    reportUnknownRevocation: true,
+                    verificationTarget: VerificationTarget.Author,
+                    signaturePlacement: SignaturePlacement.PrimarySignature,
+                    repositoryCountersignatureVerificationBehavior: SignatureVerificationBehavior.Never,
+                    revocationMode: RevocationMode.Online);
+
+                using (var test = await Test.CreateAuthorSignedPackageAsync(
+                    _fixture.UntrustedTestCertificate.Cert))
+                using (var packageReader = new PackageArchiveReader(test.PackageFile.FullName))
+                {
+                    var primarySignature = await packageReader.GetPrimarySignatureAsync(CancellationToken.None);
+
+                    var status = await _provider.GetTrustResultAsync(packageReader, primarySignature, settings, CancellationToken.None);
+
+                    Assert.Equal(expectedStatus, status.Trust);
+                }
+            }
+
+#if IS_DESKTOP
+            [CIOnlyTheory]
+            [InlineData(true, SignatureVerificationStatus.Valid)]
+            [InlineData(false, SignatureVerificationStatus.Disallowed)]
+            public async Task GetTrustResultAsync_WithUntrustedSignature_Timestamped_ReturnsStatusAsync(
                 bool allowUntrusted,
                 SignatureVerificationStatus expectedStatus)
             {
@@ -1354,7 +1820,7 @@ namespace NuGet.Packaging.FuncTest
             [CIOnlyTheory]
             [InlineData(true)]
             [InlineData(false)]
-            public async Task GetTrustResultAsync_WithRevokedPrimaryCertificate_ReturnsSuspectAsync(bool allowEverything)
+            public async Task GetTrustResultAsync_WithRevokedPrimaryCertificate_Timestamped_ReturnsSuspectAsync(bool allowEverything)
             {
                 var settings = new SignedPackageVerifierSettings(
                     allowUnsigned: allowEverything,
@@ -1375,28 +1841,25 @@ namespace NuGet.Packaging.FuncTest
                 var bcCertificate = certificateAuthority.IssueCertificate(issueCertificateOptions);
                 var timestampService = await _fixture.GetDefaultTrustedTimestampServiceAsync();
 
-                using (var certificate = new X509Certificate2(bcCertificate.GetEncoded()))
+                using (var temp = new X509Certificate2(bcCertificate.GetEncoded()))
+                using (var certificate = temp.CopyWithPrivateKey(DotNetUtilities.ToRSA(issueCertificateOptions.KeyPair.Private as RsaPrivateCrtKeyParameters)))
+                using (var test = await Test.CreateAuthorSignedPackageAsync(
+                    certificate,
+                    timestampService.Url))
+                using (var packageReader = new PackageArchiveReader(test.PackageFile.FullName))
                 {
-                    certificate.PrivateKey = DotNetUtilities.ToRSA(issueCertificateOptions.KeyPair.Private as RsaPrivateCrtKeyParameters);
+                    await certificateAuthority.OcspResponder.WaitForResponseExpirationAsync(bcCertificate);
 
-                    using (var test = await Test.CreateAuthorSignedPackageAsync(
-                        certificate,
-                        timestampService.Url))
-                    using (var packageReader = new PackageArchiveReader(test.PackageFile.FullName))
-                    {
-                        await certificateAuthority.OcspResponder.WaitForResponseExpirationAsync(bcCertificate);
+                    certificateAuthority.Revoke(
+                        bcCertificate,
+                        RevocationReason.KeyCompromise,
+                        DateTimeOffset.UtcNow.AddHours(-1));
 
-                        certificateAuthority.Revoke(
-                            bcCertificate,
-                            RevocationReason.KeyCompromise,
-                            DateTimeOffset.UtcNow.AddHours(-1));
+                    var primarySignature = await packageReader.GetPrimarySignatureAsync(CancellationToken.None);
 
-                        var primarySignature = await packageReader.GetPrimarySignatureAsync(CancellationToken.None);
+                    var status = await _provider.GetTrustResultAsync(packageReader, primarySignature, settings, CancellationToken.None);
 
-                        var status = await _provider.GetTrustResultAsync(packageReader, primarySignature, settings, CancellationToken.None);
-
-                        Assert.Equal(SignatureVerificationStatus.Suspect, status.Trust);
-                    }
+                    Assert.Equal(SignatureVerificationStatus.Suspect, status.Trust);
                 }
             }
 
@@ -1446,7 +1909,7 @@ namespace NuGet.Packaging.FuncTest
             }
 
             [CIOnlyFact]
-            public async Task GetTrustResultAsync_WithTamperedRepositoryPrimarySignedPackage_ReturnsValidAsync()
+            public async Task GetTrustResultAsync_WithTamperedRepositoryPrimarySignedPackage_Timestamped_ReturnsValidAsync()
             {
                 var settings = new SignedPackageVerifierSettings(
                     allowUnsigned: false,
@@ -1466,6 +1929,44 @@ namespace NuGet.Packaging.FuncTest
                 using (var test = await Test.CreateAuthorSignedPackageAsync(
                     _fixture.TrustedTestCertificate.Source.Cert,
                     timestampService.Url))
+                {
+                    using (var stream = test.PackageFile.Open(FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+                    {
+                        stream.Position = 0;
+
+                        stream.WriteByte(0x00);
+                    }
+
+                    using (var packageReader = new PackageArchiveReader(test.PackageFile.FullName))
+                    {
+                        var primarySignature = await packageReader.GetPrimarySignatureAsync(CancellationToken.None);
+
+                        var status = await _provider.GetTrustResultAsync(packageReader, primarySignature, settings, CancellationToken.None);
+
+                        Assert.Equal(SignatureVerificationStatus.Valid, status.Trust);
+                    }
+                }
+            }
+#endif
+            [CIOnlyFact]
+            public async Task GetTrustResultAsync_WithTamperedRepositoryPrimarySignedPackage_ReturnsValidAsync()
+            {
+                var settings = new SignedPackageVerifierSettings(
+                    allowUnsigned: false,
+                    allowIllegal: false,
+                    allowUntrusted: false,
+                    allowIgnoreTimestamp: false,
+                    allowMultipleTimestamps: false,
+                    allowNoTimestamp: true,
+                    allowUnknownRevocation: true,
+                    reportUnknownRevocation: true,
+                    verificationTarget: VerificationTarget.Author,
+                    signaturePlacement: SignaturePlacement.PrimarySignature,
+                    repositoryCountersignatureVerificationBehavior: SignatureVerificationBehavior.Never,
+                    revocationMode: RevocationMode.Online);
+
+                using (var test = await Test.CreateAuthorSignedPackageAsync(
+                    _fixture.TrustedTestCertificate.Source.Cert))
                 {
                     using (var stream = test.PackageFile.Open(FileMode.Open, FileAccess.ReadWrite, FileShare.None))
                     {
@@ -1530,9 +2031,9 @@ namespace NuGet.Packaging.FuncTest
                     Assert.Equal(SignatureVerificationStatus.Unknown, result.Trust);
                 }
             }
-
+#if IS_DESKTOP
             [CIOnlyFact]
-            public async Task GetTrustResultAsync_WithValidSignature_ReturnsValidAsync()
+            public async Task GetTrustResultAsync_WithValidTimestmapedSignature_ReturnsValidAsync()
             {
                 var settings = new SignedPackageVerifierSettings(
                     allowUnsigned: false,
@@ -1552,6 +2053,35 @@ namespace NuGet.Packaging.FuncTest
                 using (var test = await Test.CreateRepositoryPrimarySignedPackageAsync(
                     _fixture.TrustedRepositoryCertificate.Source.Cert,
                     timestampService.Url))
+                using (var packageReader = new PackageArchiveReader(test.PackageFile.FullName))
+                {
+                    var primarySignature = await packageReader.GetPrimarySignatureAsync(CancellationToken.None);
+
+                    var status = await _provider.GetTrustResultAsync(packageReader, primarySignature, settings, CancellationToken.None);
+
+                    Assert.Equal(SignatureVerificationStatus.Valid, status.Trust);
+                }
+            }
+#endif
+            [CIOnlyFact]
+            public async Task GetTrustResultAsync_WithValidSignature_ReturnsValidAsync()
+            {
+                var settings = new SignedPackageVerifierSettings(
+                    allowUnsigned: false,
+                    allowIllegal: false,
+                    allowUntrusted: false,
+                    allowIgnoreTimestamp: false,
+                    allowMultipleTimestamps: false,
+                    allowNoTimestamp: true,
+                    allowUnknownRevocation: true,
+                    reportUnknownRevocation: true,
+                    verificationTarget: VerificationTarget.Repository,
+                    signaturePlacement: SignaturePlacement.PrimarySignature,
+                    repositoryCountersignatureVerificationBehavior: SignatureVerificationBehavior.Never,
+                    revocationMode: RevocationMode.Online);
+
+                using (var test = await Test.CreateRepositoryPrimarySignedPackageAsync(
+                    _fixture.TrustedRepositoryCertificate.Source.Cert))
                 using (var packageReader = new PackageArchiveReader(test.PackageFile.FullName))
                 {
                     var primarySignature = await packageReader.GetPrimarySignatureAsync(CancellationToken.None);
@@ -1608,6 +2138,40 @@ namespace NuGet.Packaging.FuncTest
                     allowUntrusted: allowUntrusted,
                     allowIgnoreTimestamp: false,
                     allowMultipleTimestamps: false,
+                    allowNoTimestamp: true,
+                    allowUnknownRevocation: true,
+                    reportUnknownRevocation: true,
+                    verificationTarget: VerificationTarget.Repository,
+                    signaturePlacement: SignaturePlacement.PrimarySignature,
+                    repositoryCountersignatureVerificationBehavior: SignatureVerificationBehavior.Never,
+                    revocationMode: RevocationMode.Online);
+
+                using (var test = await Test.CreateRepositoryPrimarySignedPackageAsync(
+                    _fixture.UntrustedTestCertificate.Cert))
+                using (var packageReader = new PackageArchiveReader(test.PackageFile.FullName))
+                {
+                    var primarySignature = await packageReader.GetPrimarySignatureAsync(CancellationToken.None);
+
+                    var status = await _provider.GetTrustResultAsync(packageReader, primarySignature, settings, CancellationToken.None);
+
+                    Assert.Equal(expectedStatus, status.Trust);
+                }
+            }
+
+#if IS_DESKTOP
+            [CIOnlyTheory]
+            [InlineData(true, SignatureVerificationStatus.Valid)]
+            [InlineData(false, SignatureVerificationStatus.Disallowed)]
+            public async Task GetTrustResultAsync_WithUntrustedSignature_Timestamped_ReturnsStatusAsync(
+                bool allowUntrusted,
+                SignatureVerificationStatus expectedStatus)
+            {
+                var settings = new SignedPackageVerifierSettings(
+                    allowUnsigned: false,
+                    allowIllegal: false,
+                    allowUntrusted: allowUntrusted,
+                    allowIgnoreTimestamp: false,
+                    allowMultipleTimestamps: false,
                     allowNoTimestamp: false,
                     allowUnknownRevocation: true,
                     reportUnknownRevocation: true,
@@ -1633,7 +2197,7 @@ namespace NuGet.Packaging.FuncTest
             [CIOnlyTheory]
             [InlineData(true)]
             [InlineData(false)]
-            public async Task GetTrustResultAsync_WithRevokedPrimaryCertificate_ReturnsSuspectAsync(bool allowEverything)
+            public async Task GetTrustResultAsync_WithRevokedPrimaryCertificate_Timestamped_ReturnsSuspectAsync(bool allowEverything)
             {
                 var settings = new SignedPackageVerifierSettings(
                     allowUnsigned: allowEverything,
@@ -1654,31 +2218,71 @@ namespace NuGet.Packaging.FuncTest
                 var bcCertificate = certificateAuthority.IssueCertificate(issueCertificateOptions);
                 var timestampService = await _fixture.GetDefaultTrustedTimestampServiceAsync();
 
-                using (var certificate = new X509Certificate2(bcCertificate.GetEncoded()))
+                using (var temp = new X509Certificate2(bcCertificate.GetEncoded()))
+                using(var certificate = temp.CopyWithPrivateKey(DotNetUtilities.ToRSA(issueCertificateOptions.KeyPair.Private as RsaPrivateCrtKeyParameters)))
+                using (var test = await Test.CreateRepositoryPrimarySignedPackageAsync(
+                    certificate,
+                    timestampService.Url))
+                using (var packageReader = new PackageArchiveReader(test.PackageFile.FullName))
                 {
-                    certificate.PrivateKey = DotNetUtilities.ToRSA(issueCertificateOptions.KeyPair.Private as RsaPrivateCrtKeyParameters);
+                    await certificateAuthority.OcspResponder.WaitForResponseExpirationAsync(bcCertificate);
 
-                    using (var test = await Test.CreateRepositoryPrimarySignedPackageAsync(
-                        certificate,
-                        timestampService.Url))
-                    using (var packageReader = new PackageArchiveReader(test.PackageFile.FullName))
-                    {
-                        await certificateAuthority.OcspResponder.WaitForResponseExpirationAsync(bcCertificate);
+                    certificateAuthority.Revoke(
+                        bcCertificate,
+                        RevocationReason.KeyCompromise,
+                        DateTimeOffset.UtcNow.AddHours(-1));
 
-                        certificateAuthority.Revoke(
-                            bcCertificate,
-                            RevocationReason.KeyCompromise,
-                            DateTimeOffset.UtcNow.AddHours(-1));
+                    var primarySignature = await packageReader.GetPrimarySignatureAsync(CancellationToken.None);
 
-                        var primarySignature = await packageReader.GetPrimarySignatureAsync(CancellationToken.None);
+                    var status = await _provider.GetTrustResultAsync(packageReader, primarySignature, settings, CancellationToken.None);
 
-                        var status = await _provider.GetTrustResultAsync(packageReader, primarySignature, settings, CancellationToken.None);
-
-                        Assert.Equal(SignatureVerificationStatus.Suspect, status.Trust);
-                    }
+                    Assert.Equal(SignatureVerificationStatus.Suspect, status.Trust);
                 }
             }
+#endif
+            [CIOnlyTheory]
+            [InlineData(true)]
+            [InlineData(false)]
+            public async Task GetTrustResultAsync_WithRevokedPrimaryCertificate_ReturnsSuspectAsync(bool allowEverything)
+            {
+                var settings = new SignedPackageVerifierSettings(
+                    allowUnsigned: allowEverything,
+                    allowIllegal: allowEverything,
+                    allowUntrusted: allowEverything,
+                    allowIgnoreTimestamp: allowEverything,
+                    allowMultipleTimestamps: allowEverything,
+                    allowNoTimestamp: true,
+                    allowUnknownRevocation: true,
+                    reportUnknownRevocation: true,
+                    verificationTarget: VerificationTarget.Repository,
+                    signaturePlacement: SignaturePlacement.PrimarySignature,
+                    repositoryCountersignatureVerificationBehavior: SignatureVerificationBehavior.Never,
+                    revocationMode: RevocationMode.Online);
+                var testServer = await _fixture.GetSigningTestServerAsync();
+                var certificateAuthority = await _fixture.GetDefaultTrustedCertificateAuthorityAsync();
+                var issueCertificateOptions = IssueCertificateOptions.CreateDefaultForEndCertificate();
+                var bcCertificate = certificateAuthority.IssueCertificate(issueCertificateOptions);
 
+                using (var temp = new X509Certificate2(bcCertificate.GetEncoded()))
+                using (var certificate = temp.CopyWithPrivateKey(DotNetUtilities.ToRSA(issueCertificateOptions.KeyPair.Private as RsaPrivateCrtKeyParameters)))
+                using (var test = await Test.CreateRepositoryPrimarySignedPackageAsync(certificate))
+                using (var packageReader = new PackageArchiveReader(test.PackageFile.FullName))
+                {
+                    await certificateAuthority.OcspResponder.WaitForResponseExpirationAsync(bcCertificate);
+
+                    certificateAuthority.Revoke(
+                        bcCertificate,
+                        RevocationReason.KeyCompromise,
+                        DateTimeOffset.UtcNow.AddHours(-1));
+
+                    var primarySignature = await packageReader.GetPrimarySignatureAsync(CancellationToken.None);
+
+                    var status = await _provider.GetTrustResultAsync(packageReader, primarySignature, settings, CancellationToken.None);
+
+                    Assert.Equal(SignatureVerificationStatus.Suspect, status.Trust);
+                }
+            }
+#if IS_DESKTOP
             [CIOnlyTheory]
             [InlineData(true, SignatureVerificationStatus.Valid)]
             [InlineData(false, SignatureVerificationStatus.Disallowed)]
@@ -1725,7 +2329,7 @@ namespace NuGet.Packaging.FuncTest
             }
 
             [CIOnlyFact]
-            public async Task GetTrustResultAsync_WithTamperedRepositoryPrimarySignedPackage_ReturnsValidAsync()
+            public async Task GetTrustResultAsync_WithTamperedRepositoryPrimarySignedPackage_Timestamped_ReturnsValidAsync()
             {
                 var settings = new SignedPackageVerifierSettings(
                     allowUnsigned: false,
@@ -1763,9 +2367,47 @@ namespace NuGet.Packaging.FuncTest
                     }
                 }
             }
-
+#endif
             [CIOnlyFact]
-            public async Task GetTrustResultAsync_WithAlwaysVerifyCountersignatureBehavior_ReturnsDisallowedAsync()
+            public async Task GetTrustResultAsync_WithTamperedRepositoryPrimarySignedPackage_ReturnsValidAsync()
+            {
+                var settings = new SignedPackageVerifierSettings(
+                    allowUnsigned: false,
+                    allowIllegal: false,
+                    allowUntrusted: false,
+                    allowIgnoreTimestamp: false,
+                    allowMultipleTimestamps: false,
+                    allowNoTimestamp: true,
+                    allowUnknownRevocation: true,
+                    reportUnknownRevocation: true,
+                    verificationTarget: VerificationTarget.Repository,
+                    signaturePlacement: SignaturePlacement.PrimarySignature,
+                    repositoryCountersignatureVerificationBehavior: SignatureVerificationBehavior.Never,
+                    revocationMode: RevocationMode.Online);
+
+                using (var test = await Test.CreateRepositoryPrimarySignedPackageAsync(
+                    _fixture.TrustedRepositoryCertificate.Source.Cert))
+                {
+                    using (var stream = test.PackageFile.Open(FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+                    {
+                        stream.Position = 0;
+
+                        stream.WriteByte(0x00);
+                    }
+
+                    using (var packageReader = new PackageArchiveReader(test.PackageFile.FullName))
+                    {
+                        var primarySignature = await packageReader.GetPrimarySignatureAsync(CancellationToken.None);
+
+                        var status = await _provider.GetTrustResultAsync(packageReader, primarySignature, settings, CancellationToken.None);
+
+                        Assert.Equal(SignatureVerificationStatus.Valid, status.Trust);
+                    }
+                }
+            }
+#if IS_DESKTOP
+            [CIOnlyFact]
+            public async Task GetTrustResultAsync_WithAlwaysVerifyCountersignatureBehavior_Timestamped_ReturnsDisallowedAsync()
             {
                 var settings = new SignedPackageVerifierSettings(
                     allowUnsigned: false,
@@ -1787,6 +2429,46 @@ namespace NuGet.Packaging.FuncTest
                 using (var test = await Test.CreateRepositoryPrimarySignedPackageAsync(
                     _fixture.TrustedRepositoryCertificate.Source.Cert,
                     timestampService.Url))
+                using (var packageReader = new PackageArchiveReader(test.PackageFile.FullName))
+                {
+                    var primarySignature = await packageReader.GetPrimarySignatureAsync(CancellationToken.None);
+
+                    var status = await _provider.GetTrustResultAsync(packageReader, primarySignature, settings, CancellationToken.None);
+
+                    Assert.Equal(SignatureVerificationStatus.Disallowed, status.Trust);
+
+                    var errors = status.GetErrorIssues();
+
+                    Assert.Equal(1, errors.Count());
+
+                    var error = errors.Single();
+
+                    Assert.Equal(NuGetLogCode.NU3038, error.Code);
+                    Assert.Equal("Verification settings require a repository countersignature, but the package does not have a repository countersignature.", error.Message);
+                }
+            }
+#endif
+            [CIOnlyFact]
+            public async Task GetTrustResultAsync_WithAlwaysVerifyCountersignatureBehavior_ReturnsDisallowedAsync()
+            {
+                var settings = new SignedPackageVerifierSettings(
+                    allowUnsigned: false,
+                    allowIllegal: false,
+                    allowUntrusted: false,
+                    allowIgnoreTimestamp: false,
+                    allowMultipleTimestamps: false,
+                    allowNoTimestamp: true,
+                    allowUnknownRevocation: true,
+                    reportUnknownRevocation: true,
+                    verificationTarget: VerificationTarget.Repository,
+                    signaturePlacement: SignaturePlacement.Any,
+                    repositoryCountersignatureVerificationBehavior: SignatureVerificationBehavior.Always,
+                    revocationMode: RevocationMode.Online);
+                var testServer = await _fixture.GetSigningTestServerAsync();
+                var certificateAuthority = await _fixture.GetDefaultTrustedCertificateAuthorityAsync();
+
+                using (var test = await Test.CreateRepositoryPrimarySignedPackageAsync(
+                    _fixture.TrustedRepositoryCertificate.Source.Cert))
                 using (var packageReader = new PackageArchiveReader(test.PackageFile.FullName))
                 {
                     var primarySignature = await packageReader.GetPrimarySignatureAsync(CancellationToken.None);
@@ -1861,6 +2543,37 @@ namespace NuGet.Packaging.FuncTest
                     allowUntrusted: false,
                     allowIgnoreTimestamp: false,
                     allowMultipleTimestamps: false,
+                    allowNoTimestamp: true,
+                    allowUnknownRevocation: true,
+                    reportUnknownRevocation: true,
+                    verificationTarget: VerificationTarget.Repository,
+                    signaturePlacement: SignaturePlacement.Countersignature,
+                    repositoryCountersignatureVerificationBehavior: SignatureVerificationBehavior.IfExists,
+                    revocationMode: RevocationMode.Online);
+
+                using (var test = await Test.CreateAuthorSignedRepositoryCountersignedPackageAsync(
+                    _fixture.TrustedTestCertificate.Source.Cert,
+                    _fixture.TrustedRepositoryCertificate.Source.Cert))
+                using (var packageReader = new PackageArchiveReader(test.PackageFile.FullName))
+                {
+                    var primarySignature = await packageReader.GetPrimarySignatureAsync(CancellationToken.None);
+
+                    var status = await _provider.GetTrustResultAsync(packageReader, primarySignature, settings, CancellationToken.None);
+
+                    Assert.Equal(SignatureVerificationStatus.Valid, status.Trust);
+                }
+            }
+
+#if IS_DESKTOP
+            [CIOnlyFact]
+            public async Task GetTrustResultAsync_WithValidCountersignature_Timestamped_ReturnsValidAsync()
+            {
+                var settings = new SignedPackageVerifierSettings(
+                    allowUnsigned: false,
+                    allowIllegal: false,
+                    allowUntrusted: false,
+                    allowIgnoreTimestamp: false,
+                    allowMultipleTimestamps: false,
                     allowNoTimestamp: false,
                     allowUnknownRevocation: true,
                     reportUnknownRevocation: true,
@@ -1886,7 +2599,7 @@ namespace NuGet.Packaging.FuncTest
             }
 
             [CIOnlyFact]
-            public async Task GetTrustResultAsync_WithValidCountersignatureAndUntrustedPrimarySignature_ReturnsValidAsync()
+            public async Task GetTrustResultAsync_WithValidCountersignatureAndUntrustedPrimarySignature_Timestamped_ReturnsValidAsync()
             {
                 var settings = new SignedPackageVerifierSettings(
                     allowUnsigned: false,
@@ -1917,7 +2630,37 @@ namespace NuGet.Packaging.FuncTest
                     Assert.Equal(SignatureVerificationStatus.Valid, status.Trust);
                 }
             }
+#endif
+            [CIOnlyFact]
+            public async Task GetTrustResultAsync_WithValidCountersignatureAndUntrustedPrimarySignature_ReturnsValidAsync()
+            {
+                var settings = new SignedPackageVerifierSettings(
+                    allowUnsigned: false,
+                    allowIllegal: false,
+                    allowUntrusted: false,
+                    allowIgnoreTimestamp: true,
+                    allowMultipleTimestamps: false,
+                    allowNoTimestamp: false,
+                    allowUnknownRevocation: true,
+                    reportUnknownRevocation: true,
+                    verificationTarget: VerificationTarget.Repository,
+                    signaturePlacement: SignaturePlacement.Countersignature,
+                    repositoryCountersignatureVerificationBehavior: SignatureVerificationBehavior.IfExists,
+                    revocationMode: RevocationMode.Online);
 
+                using (var test = await Test.CreateAuthorSignedRepositoryCountersignedPackageAsync(
+                    _fixture.UntrustedTestCertificate.Cert,
+                    _fixture.TrustedRepositoryCertificate.Source.Cert))
+                using (var packageReader = new PackageArchiveReader(test.PackageFile.FullName))
+                {
+                    var primarySignature = await packageReader.GetPrimarySignatureAsync(CancellationToken.None);
+
+                    var status = await _provider.GetTrustResultAsync(packageReader, primarySignature, settings, CancellationToken.None);
+
+                    Assert.Equal(SignatureVerificationStatus.Valid, status.Trust);
+                }
+            }
+#if IS_DESKTOP
             [CIOnlyTheory]
             [InlineData(true, SignatureVerificationStatus.Valid)]
             [InlineData(false, SignatureVerificationStatus.Disallowed)]
@@ -1957,7 +2700,7 @@ namespace NuGet.Packaging.FuncTest
             [CIOnlyTheory]
             [InlineData(true, SignatureVerificationStatus.Valid)]
             [InlineData(false, SignatureVerificationStatus.Disallowed)]
-            public async Task VerifyAsync_WithUntrustedCountersignature_ReturnsStatusAsync(
+            public async Task VerifyAsync_WithUntrustedCountersignature_Timestamped_ReturnsStatusAsync(
                 bool allowUntrusted,
                 SignatureVerificationStatus expectedStatus)
             {
@@ -1990,11 +2733,46 @@ namespace NuGet.Packaging.FuncTest
                     Assert.Equal(expectedStatus, status.Trust);
                 }
             }
+#endif
+            [CIOnlyTheory]
+            [InlineData(true, SignatureVerificationStatus.Valid)]
+            [InlineData(false, SignatureVerificationStatus.Disallowed)]
+            public async Task VerifyAsync_WithUntrustedCountersignature_ReturnsStatusAsync(
+                bool allowUntrusted,
+                SignatureVerificationStatus expectedStatus)
+            {
+                var settings = new SignedPackageVerifierSettings(
+                    allowUnsigned: false,
+                    allowIllegal: false,
+                    allowUntrusted: allowUntrusted,
+                    allowIgnoreTimestamp: true,
+                    allowMultipleTimestamps: false,
+                    allowNoTimestamp: false,
+                    allowUnknownRevocation: true,
+                    reportUnknownRevocation: true,
+                    verificationTarget: VerificationTarget.Repository,
+                    signaturePlacement: SignaturePlacement.Countersignature,
+                    repositoryCountersignatureVerificationBehavior: SignatureVerificationBehavior.IfExists,
+                    revocationMode: RevocationMode.Online);
 
+                using (var test = await Test.CreateAuthorSignedRepositoryCountersignedPackageAsync(
+                    _fixture.TrustedTestCertificate.Source.Cert,
+                    _fixture.UntrustedTestCertificate.Cert))
+                using (var packageReader = new PackageArchiveReader(test.PackageFile.FullName))
+                {
+                    var primarySignature = await packageReader.GetPrimarySignatureAsync(CancellationToken.None);
+
+                    var status = await _provider.GetTrustResultAsync(packageReader, primarySignature, settings, CancellationToken.None);
+
+                    Assert.Equal(expectedStatus, status.Trust);
+                }
+            }
+
+#if IS_DESKTOP
             [CIOnlyTheory]
             [InlineData(true)]
             [InlineData(false)]
-            public async Task VerifyAsync_WithRevokedCountersignatureCertificate_ReturnsSuspectAsync(bool allowEverything)
+            public async Task VerifyAsync_WithRevokedCountersignatureCertificate_Timestamped_ReturnsSuspectAsync(bool allowEverything)
             {
                 var settings = new SignedPackageVerifierSettings(
                     allowUnsigned: allowEverything,
@@ -2015,33 +2793,76 @@ namespace NuGet.Packaging.FuncTest
                 var bcCertificate = certificateAuthority.IssueCertificate(issueCertificateOptions);
                 var timestampService = await _fixture.GetDefaultTrustedTimestampServiceAsync();
 
-                using (var certificate = new X509Certificate2(bcCertificate.GetEncoded()))
+                using (var temp = new X509Certificate2(bcCertificate.GetEncoded()))
+                using (var certificate = temp.CopyWithPrivateKey(DotNetUtilities.ToRSA(issueCertificateOptions.KeyPair.Private as RsaPrivateCrtKeyParameters)))
+                using (var test = await Test.CreateAuthorSignedRepositoryCountersignedPackageAsync(
+                    _fixture.TrustedTestCertificate.Source.Cert,
+                    certificate,
+                    timestampService.Url,
+                    timestampService.Url))
+                using (var packageReader = new PackageArchiveReader(test.PackageFile.FullName))
                 {
-                    certificate.PrivateKey = DotNetUtilities.ToRSA(issueCertificateOptions.KeyPair.Private as RsaPrivateCrtKeyParameters);
+                    await certificateAuthority.OcspResponder.WaitForResponseExpirationAsync(bcCertificate);
 
-                    using (var test = await Test.CreateAuthorSignedRepositoryCountersignedPackageAsync(
-                        _fixture.TrustedTestCertificate.Source.Cert,
-                        certificate,
-                        timestampService.Url,
-                        timestampService.Url))
-                    using (var packageReader = new PackageArchiveReader(test.PackageFile.FullName))
-                    {
-                        await certificateAuthority.OcspResponder.WaitForResponseExpirationAsync(bcCertificate);
+                    certificateAuthority.Revoke(
+                        bcCertificate,
+                        RevocationReason.KeyCompromise,
+                        DateTimeOffset.UtcNow.AddHours(-1));
 
-                        certificateAuthority.Revoke(
-                            bcCertificate,
-                            RevocationReason.KeyCompromise,
-                            DateTimeOffset.UtcNow.AddHours(-1));
+                    var primarySignature = await packageReader.GetPrimarySignatureAsync(CancellationToken.None);
 
-                        var primarySignature = await packageReader.GetPrimarySignatureAsync(CancellationToken.None);
+                    var status = await _provider.GetTrustResultAsync(packageReader, primarySignature, settings, CancellationToken.None);
 
-                        var status = await _provider.GetTrustResultAsync(packageReader, primarySignature, settings, CancellationToken.None);
-
-                        Assert.Equal(SignatureVerificationStatus.Suspect, status.Trust);
-                    }
+                    Assert.Equal(SignatureVerificationStatus.Suspect, status.Trust);
                 }
             }
+#endif
 
+            [CIOnlyTheory]
+            [InlineData(true)]
+            [InlineData(false)]
+            public async Task VerifyAsync_WithRevokedCountersignatureCertificate_ReturnsSuspectAsync(bool allowEverything)
+            {
+                var settings = new SignedPackageVerifierSettings(
+                    allowUnsigned: allowEverything,
+                    allowIllegal: allowEverything,
+                    allowUntrusted: allowEverything,
+                    allowIgnoreTimestamp: allowEverything,
+                    allowMultipleTimestamps: allowEverything,
+                    allowNoTimestamp: true,
+                    allowUnknownRevocation: true,
+                    reportUnknownRevocation: true,
+                    verificationTarget: VerificationTarget.Repository,
+                    signaturePlacement: SignaturePlacement.Countersignature,
+                    repositoryCountersignatureVerificationBehavior: SignatureVerificationBehavior.IfExists,
+                    revocationMode: RevocationMode.Online);
+                var testServer = await _fixture.GetSigningTestServerAsync();
+                var certificateAuthority = await _fixture.GetDefaultTrustedCertificateAuthorityAsync();
+                var issueCertificateOptions = IssueCertificateOptions.CreateDefaultForEndCertificate();
+                var bcCertificate = certificateAuthority.IssueCertificate(issueCertificateOptions);
+
+                using (var temp = new X509Certificate2(bcCertificate.GetEncoded()))
+                using (var certificate = temp.CopyWithPrivateKey(DotNetUtilities.ToRSA(issueCertificateOptions.KeyPair.Private as RsaPrivateCrtKeyParameters)))
+                using (var test = await Test.CreateAuthorSignedRepositoryCountersignedPackageAsync(
+                    _fixture.TrustedTestCertificate.Source.Cert,
+                    certificate))
+                using (var packageReader = new PackageArchiveReader(test.PackageFile.FullName))
+                {
+                    await certificateAuthority.OcspResponder.WaitForResponseExpirationAsync(bcCertificate);
+
+                    certificateAuthority.Revoke(
+                        bcCertificate,
+                        RevocationReason.KeyCompromise,
+                        DateTimeOffset.UtcNow.AddHours(-1));
+
+                    var primarySignature = await packageReader.GetPrimarySignatureAsync(CancellationToken.None);
+
+                    var status = await _provider.GetTrustResultAsync(packageReader, primarySignature, settings, CancellationToken.None);
+
+                    Assert.Equal(SignatureVerificationStatus.Suspect, status.Trust);
+                }
+            }
+#if IS_DESKTOP
             [CIOnlyTheory]
             [InlineData(true, SignatureVerificationStatus.Valid)]
             [InlineData(false, SignatureVerificationStatus.Disallowed)]
@@ -2091,7 +2912,7 @@ namespace NuGet.Packaging.FuncTest
             }
 
             [CIOnlyFact]
-            public async Task VerifyAsync_WithTamperedRepositoryCountersignedPackage_ReturnsValidAsync()
+            public async Task VerifyAsync_WithTamperedRepositoryCountersignedPackage_Timestmaped_ReturnsValidAsync()
             {
                 var settings = new SignedPackageVerifierSettings(
                     allowUnsigned: false,
@@ -2131,7 +2952,47 @@ namespace NuGet.Packaging.FuncTest
                     }
                 }
             }
+#endif
+            [CIOnlyFact]
+            public async Task VerifyAsync_WithTamperedRepositoryCountersignedPackage_ReturnsValidAsync()
+            {
+                var settings = new SignedPackageVerifierSettings(
+                    allowUnsigned: false,
+                    allowIllegal: false,
+                    allowUntrusted: false,
+                    allowIgnoreTimestamp: false,
+                    allowMultipleTimestamps: false,
+                    allowNoTimestamp: true,
+                    allowUnknownRevocation: true,
+                    reportUnknownRevocation: true,
+                    verificationTarget: VerificationTarget.Repository,
+                    signaturePlacement: SignaturePlacement.Countersignature,
+                    repositoryCountersignatureVerificationBehavior: SignatureVerificationBehavior.IfExists,
+                    revocationMode: RevocationMode.Online);
+
+                using (var test = await Test.CreateAuthorSignedRepositoryCountersignedPackageAsync(
+                    _fixture.TrustedTestCertificate.Source.Cert,
+                    _fixture.TrustedRepositoryCertificate.Source.Cert))
+                {
+                    using (var stream = test.PackageFile.Open(FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+                    {
+                        stream.Position = 0;
+
+                        stream.WriteByte(0x00);
+                    }
+
+                    using (var packageReader = new PackageArchiveReader(test.PackageFile.FullName))
+                    {
+                        var primarySignature = await packageReader.GetPrimarySignatureAsync(CancellationToken.None);
+
+                        var status = await _provider.GetTrustResultAsync(packageReader, primarySignature, settings, CancellationToken.None);
+
+                        Assert.Equal(SignatureVerificationStatus.Valid, status.Trust);
+                    }
+                }
+            }
         }
+
 
         private sealed class Test : IDisposable
         {
@@ -2263,7 +3124,7 @@ namespace NuGet.Packaging.FuncTest
             Assert.Contains(issues, issue =>
                 issue.Code == code &&
                 issue.Level == logLevel &&
-                issue.Message.Contains("The revocation function was unable to check revocation for the certificate."));
+                issue.Message.Contains("The revocation function was unable to check revocation for the certificate"));
         }
 
         private static byte[] GetResource(string name)
