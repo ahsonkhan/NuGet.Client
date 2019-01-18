@@ -558,7 +558,10 @@ namespace NuGet.Packaging.Test
                 Assert.Equal(0, test.Logger.Errors);
                 Assert.Equal(1, test.Logger.Warnings);
                 Assert.Equal(1, test.Logger.Messages.Count());
-                Assert.True(test.Logger.Messages.Contains("A certificate chain processed, but terminated in a root certificate which is not trusted by the trust provider"));
+                Assert.Contains(test.Logger.LogMessages, message =>
+                    message.Code == NuGetLogCode.NU3018 &&
+                    message.Level == LogLevel.Warning &&
+                    message.Message.Contains("A certificate chain processed, but terminated in a root certificate which is not trusted by the trust provider"));
             }
         }
 
@@ -602,7 +605,11 @@ namespace NuGet.Packaging.Test
                     Assert.Equal(0, test.Logger.Errors);
                     Assert.Equal(1, test.Logger.Warnings);
                     Assert.Equal(1, test.Logger.Messages.Count());
-                    Assert.True(test.Logger.Messages.Contains("A certificate chain processed, but terminated in a root certificate which is not trusted by the trust provider"));
+
+                    Assert.Contains(test.Logger.LogMessages, message =>
+                        message.Code == NuGetLogCode.NU3018 &&
+                        message.Level == LogLevel.Warning &&
+                        message.Message.Contains("A certificate chain processed, but terminated in a root certificate which is not trusted by the trust provider"));
                 }
             }
         }
