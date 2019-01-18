@@ -528,14 +528,22 @@ namespace NuGet.Packaging.Test
 
                 Assert.Equal(1, test.Logger.Errors);
                 Assert.Equal(1, test.Logger.Warnings);
-                Assert.Contains(test.Logger.LogMessages, message =>
-                    message.Code == NuGetLogCode.NU3018 &&
-                    message.Level == LogLevel.Error &&
-                    message.Message.Contains("A required certificate is not within its validity period when verifying against the current system clock or the timestamp in the signed file"));
-                Assert.Contains(test.Logger.LogMessages, message =>
-                    message.Code == NuGetLogCode.NU3018 &&
-                    message.Level == LogLevel.Warning &&
-                    message.Message.Contains("A certificate chain processed, but terminated in a root certificate which is not trusted by the trust provider"));
+
+                if (RuntimeEnvironmentHelper.IsWindows)
+                {
+                    AssertNotTimeValid(test.Logger.LogMessages, LogLevel.Error);
+                    SigningTestUtility.AssertUntrustedRoot(test.Logger.LogMessages, LogLevel.Warning);
+                }
+                else if (RuntimeEnvironmentHelper.IsMacOSX)
+                {
+                    AssertExpiredCertificate(test.Logger.LogMessages, LogLevel.Error);
+                    SigningTestUtility.AssertUntrustedRoot(test.Logger.LogMessages, LogLevel.Warning);
+                }
+                else
+                {
+                    AssertPartialChain(test.Logger.LogMessages, LogLevel.Error);
+                    SigningTestUtility.AssertOfflineRevocation(test.Logger.LogMessages, LogLevel.Warning);
+                }
             }
         }
 
@@ -558,10 +566,14 @@ namespace NuGet.Packaging.Test
                 Assert.Equal(0, test.Logger.Errors);
                 Assert.Equal(1, test.Logger.Warnings);
                 Assert.Equal(1, test.Logger.Messages.Count());
-                Assert.Contains(test.Logger.LogMessages, message =>
-                    message.Code == NuGetLogCode.NU3018 &&
-                    message.Level == LogLevel.Warning &&
-                    message.Message.Contains("A certificate chain processed, but terminated in a root certificate which is not trusted by the trust provider"));
+                Assert.Equal(RuntimeEnvironmentHelper.IsLinux ? 2 : 1, test.Logger.Warnings);
+
+                SigningTestUtility.AssertUntrustedRoot(test.Logger.LogMessages, LogLevel.Warning);
+
+                if (RuntimeEnvironmentHelper.IsLinux)
+                {
+                    SigningTestUtility.AssertOfflineRevocation(test.Logger.LogMessages, LogLevel.Warning);
+                }
             }
         }
 
@@ -603,13 +615,14 @@ namespace NuGet.Packaging.Test
 
                     Assert.Equal(0, test.Options.OutputPackageStream.Length);
                     Assert.Equal(0, test.Logger.Errors);
-                    Assert.Equal(1, test.Logger.Warnings);
-                    Assert.Equal(1, test.Logger.Messages.Count());
+                    Assert.Equal(RuntimeEnvironmentHelper.IsLinux ? 2 : 1, test.Logger.Warnings);
 
-                    Assert.Contains(test.Logger.LogMessages, message =>
-                        message.Code == NuGetLogCode.NU3018 &&
-                        message.Level == LogLevel.Warning &&
-                        message.Message.Contains("A certificate chain processed, but terminated in a root certificate which is not trusted by the trust provider"));
+                    SigningTestUtility.AssertUntrustedRoot(test.Logger.LogMessages, LogLevel.Warning);
+
+                    if (RuntimeEnvironmentHelper.IsLinux)
+                    {
+                        SigningTestUtility.AssertOfflineRevocation(test.Logger.LogMessages, LogLevel.Warning);
+                    }
                 }
             }
         }
