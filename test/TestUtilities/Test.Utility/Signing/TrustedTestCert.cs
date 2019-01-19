@@ -10,7 +10,7 @@ namespace Test.Utility.Signing
     {
         public static TrustedTestCert<X509Certificate2> Create(
             X509Certificate2 cert,
-            StoreName storeName = StoreName.TrustedPeople,
+            StoreName storeName = StoreName.My,
             StoreLocation storeLocation = StoreLocation.CurrentUser,
             TimeSpan? maximumValidityPeriod = null)
         {
@@ -42,7 +42,7 @@ namespace Test.Utility.Signing
 
         public TrustedTestCert(T source,
             Func<T, X509Certificate2> getCert,
-            StoreName storeName = StoreName.TrustedPeople,
+            StoreName storeName = StoreName.My,
             StoreLocation storeLocation = StoreLocation.CurrentUser,
             TimeSpan? maximumValidityPeriod = null)
         {

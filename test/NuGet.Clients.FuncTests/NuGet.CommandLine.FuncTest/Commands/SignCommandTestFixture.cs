@@ -9,6 +9,7 @@ using System.Net;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 using NuGet.CommandLine.Test;
+using NuGet.Common;
 using NuGet.Packaging.Signing;
 using NuGet.Test.Utility;
 using Test.Utility.Signing;
@@ -28,7 +29,9 @@ namespace NuGet.CommandLine.FuncTest.Commands
         private TrustedTestCert<TestCertificate> _trustedTestCertExpired;
         private TrustedTestCert<TestCertificate> _trustedTestCertNotYetValid;
         private TrustedTestCert<X509Certificate2> _trustedTimestampRoot;
+#if IS_DESKTOP
         private TrustedTestCert<X509Certificate2> _untrustedSelfIssuedCertificateInCertificateStore;
+#endif
         private TrustedTestCertificateChain _trustedTestCertChain;
         private TrustedTestCertificateChain _revokedTestCertChain;
         private TrustedTestCertificateChain _revocationUnknownTestCertChain;
@@ -55,7 +58,15 @@ namespace NuGet.CommandLine.FuncTest.Commands
                     // Code Sign EKU needs trust to a root authority
                     // Add the cert to Root CA list in LocalMachine as it does not prompt a dialog
                     // This makes all the associated tests to require admin privilege
-                    _trustedTestCert = TestCertificate.Generate(actionGenerator).WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.LocalMachine);
+                    var testCert = TestCertificate.Generate(actionGenerator);
+                    if (RuntimeEnvironmentHelper.IsWindows)
+                    {
+                        _trustedTestCert = testCert.WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.LocalMachine);
+                    }
+                    else
+                    {
+                        _trustedTestCert = testCert.WithPrivateKeyAndTrust(StoreName.My, StoreLocation.CurrentUser);
+                    }
                 }
 
                 return _trustedTestCert;
@@ -72,7 +83,15 @@ namespace NuGet.CommandLine.FuncTest.Commands
 
                     // Add the cert to Root CA list in LocalMachine as it does not prompt a dialog
                     // This makes all the associated tests to require admin privilege
-                    _trustedTestCertWithInvalidEku = TestCertificate.Generate(actionGenerator).WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.LocalMachine);
+                    var testCert = TestCertificate.Generate(actionGenerator);
+                    if (RuntimeEnvironmentHelper.IsWindows)
+                    {
+                        _trustedTestCertWithInvalidEku = testCert.WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.LocalMachine);
+                    }
+                    else
+                    {
+                        _trustedTestCertWithInvalidEku = testCert.WithPrivateKeyAndTrust(StoreName.My, StoreLocation.CurrentUser);
+                    }
                 }
 
                 return _trustedTestCertWithInvalidEku;
@@ -90,7 +109,15 @@ namespace NuGet.CommandLine.FuncTest.Commands
                     // Code Sign EKU needs trust to a root authority
                     // Add the cert to Root CA list in LocalMachine as it does not prompt a dialog
                     // This makes all the associated tests to require admin privilege
-                    _trustedTestCertExpired = TestCertificate.Generate(actionGenerator).WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.LocalMachine);
+                    var testCert = TestCertificate.Generate(actionGenerator);
+                    if (RuntimeEnvironmentHelper.IsWindows)
+                    {
+                        _trustedTestCertExpired = testCert.WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.LocalMachine);
+                    }
+                    else
+                    {
+                        _trustedTestCertExpired = testCert.WithPrivateKeyAndTrust(StoreName.My, StoreLocation.CurrentUser);
+                    }
                 }
 
                 return _trustedTestCertExpired;
@@ -108,7 +135,15 @@ namespace NuGet.CommandLine.FuncTest.Commands
                     // Code Sign EKU needs trust to a root authority
                     // Add the cert to Root CA list in LocalMachine as it does not prompt a dialog
                     // This makes all the associated tests to require admin privilege
-                    _trustedTestCertNotYetValid = TestCertificate.Generate(actionGenerator).WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.LocalMachine);
+                    var testCert = TestCertificate.Generate(actionGenerator);
+                    if (RuntimeEnvironmentHelper.IsWindows)
+                    {
+                        _trustedTestCertNotYetValid = testCert.WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.LocalMachine);
+                    }
+                    else
+                    {
+                        _trustedTestCertNotYetValid = testCert.WithPrivateKeyAndTrust(StoreName.My, StoreLocation.CurrentUser);
+                    }
                 }
 
                 return _trustedTestCertNotYetValid;
@@ -177,7 +212,8 @@ namespace NuGet.CommandLine.FuncTest.Commands
                 return _revocationUnknownTestCertChain.Leaf;
             }
         }
-
+// Linux and MacOS don't consider my/currentUser as untrusted
+#if IS_DESKTOP
         public X509Certificate2 UntrustedSelfIssuedCertificateInCertificateStore
         {
             get
@@ -195,7 +231,7 @@ namespace NuGet.CommandLine.FuncTest.Commands
                 return new X509Certificate2(_untrustedSelfIssuedCertificateInCertificateStore.Source);
             }
         }
-
+#endif
         public IList<ISignatureVerificationProvider> TrustProviders
         {
             get
@@ -343,7 +379,9 @@ namespace NuGet.CommandLine.FuncTest.Commands
             _trustedTestCertExpired?.Dispose();
             _trustedTestCertNotYetValid?.Dispose();
             _trustedTimestampRoot?.Dispose();
+#if IS_DESKTOP
             _untrustedSelfIssuedCertificateInCertificateStore?.Dispose();
+#endif
             _trustedTestCertChain?.Dispose();
             _revokedTestCertChain?.Dispose();
             _revocationUnknownTestCertChain?.Dispose();
@@ -365,10 +403,20 @@ namespace NuGet.CommandLine.FuncTest.Commands
             var intermediateCa = rootCa.CreateIntermediateCertificateAuthority();
             var rootCertificate = new X509Certificate2(rootCa.Certificate.GetEncoded());
 
-            _trustedTimestampRoot = TrustedTestCert.Create(
-                rootCertificate,
-                StoreName.Root,
-                StoreLocation.LocalMachine);
+            if (RuntimeEnvironmentHelper.IsWindows)
+            {
+                _trustedTimestampRoot = TrustedTestCert.Create(
+                    rootCertificate,
+                    StoreName.Root,
+                    StoreLocation.LocalMachine);
+            }
+            else
+            {
+                _trustedTimestampRoot = TrustedTestCert.Create(
+                    rootCertificate,
+                    StoreName.My,
+                    StoreLocation.CurrentUser);
+            }
 
             var ca = intermediateCa;
 

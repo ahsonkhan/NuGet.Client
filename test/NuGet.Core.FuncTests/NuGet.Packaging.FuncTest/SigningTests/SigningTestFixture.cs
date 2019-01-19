@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
+using NuGet.Common;
 using NuGet.Packaging.Signing;
 using Test.Utility.Signing;
 
@@ -110,8 +111,21 @@ namespace NuGet.Packaging.FuncTest
                         var certificate1 = SigningTestUtility.GenerateCertificate(certificateName, rsa);
                         var certificate2 = SigningTestUtility.GenerateCertificate(certificateName, rsa);
 
-                        var testCertificate1 = new TestCertificate() { Cert = certificate1 }.WithTrust(StoreName.Root, StoreLocation.LocalMachine);
-                        var testCertificate2 = new TestCertificate() { Cert = certificate2 }.WithTrust(StoreName.Root, StoreLocation.LocalMachine);
+                        var temp1 = new TestCertificate() { Cert = certificate1 };
+                        var temp2 = new TestCertificate() { Cert = certificate2 };
+                        
+                        TrustedTestCert<TestCertificate> testCertificate1 = null;
+                        TrustedTestCert<TestCertificate> testCertificate2 = null;
+                        if (RuntimeEnvironmentHelper.IsWindows)
+                        {
+                            testCertificate1 = temp1.WithTrust(StoreName.Root, StoreLocation.LocalMachine);
+                            testCertificate2 = temp2.WithTrust(StoreName.Root, StoreLocation.LocalMachine);
+                        }
+                        else
+                        {
+                            testCertificate1 = temp1.WithTrust(StoreName.My, StoreLocation.CurrentUser);
+                            testCertificate2 = temp2.WithTrust(StoreName.My, StoreLocation.CurrentUser);
+                        }
 
                         _trustedTestCertificateWithReissuedCertificate = new[]
                         {
@@ -190,10 +204,20 @@ namespace NuGet.Packaging.FuncTest
             var intermediateCa = rootCa.CreateIntermediateCertificateAuthority();
             var rootCertificate = new X509Certificate2(rootCa.Certificate.GetEncoded());
 
-            _trustedServerRoot = TrustedTestCert.Create(
-                rootCertificate,
-                StoreName.Root,
-                StoreLocation.LocalMachine);
+            if (RuntimeEnvironmentHelper.IsWindows)
+            {
+                _trustedServerRoot = TrustedTestCert.Create(
+                    rootCertificate,
+                    StoreName.Root,
+                    StoreLocation.LocalMachine);
+            }
+            else
+            {
+                _trustedServerRoot = TrustedTestCert.Create(
+                    rootCertificate,
+                    StoreName.My,
+                    StoreLocation.CurrentUser);
+            }
 
             var ca = intermediateCa;
 

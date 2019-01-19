@@ -91,10 +91,20 @@ namespace NuGet.Packaging.FuncTest
 
             var rootCertificate = new X509Certificate2(rootCa.Certificate.GetEncoded());
 
-            var trustedServerRoot = TrustedTestCert.Create(
-                rootCertificate,
-                StoreName.Root,
-                StoreLocation.LocalMachine);
+            if (RuntimeEnvironmentHelper.IsWindows)
+            {
+                var trustedServerRoot = TrustedTestCert.Create(
+                    rootCertificate,
+                    StoreName.Root,
+                    StoreLocation.LocalMachine);
+            }
+            else
+            {
+                var trustedServerRoot = TrustedTestCert.Create(
+                    rootCertificate,
+                    StoreName.My,
+                    StoreLocation.CurrentUser);
+            }
 
             var ca = intermediateCa;
 

@@ -108,7 +108,7 @@ namespace NuGet.CommandLine.FuncTest.Commands
                 result.AllOutput.Should().Contain($"WARNING: {string.Format(_NU3027, SigningTestUtility.AddSignatureLogPrefix(_NU3027Message, nupkg.Identity, context.WorkingDirectory))}");
             }
         }
-
+#if IS_DESKTOP
         [CIOnlyFact]
         public async Task Install_UntrustedCertSignedPackage_WarnsAsync()
         {
@@ -142,6 +142,7 @@ namespace NuGet.CommandLine.FuncTest.Commands
                 result.AllOutput.Should().Contain($"WARNING: {string.Format(_NU3027, SigningTestUtility.AddSignatureLogPrefix(_NU3027Message, nupkg.Identity, context.WorkingDirectory))}");
             }
         }
+#endif
 
         [CIOnlyFact]
         public async Task Install_TamperedPackage_FailsAsync()

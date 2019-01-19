@@ -5,6 +5,7 @@ using System;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 using NuGet.CommandLine.Test;
+using NuGet.Common;
 using Test.Utility.Signing;
 
 namespace NuGet.MSSigning.Extensions.FuncTest.Commands
@@ -44,7 +45,15 @@ namespace NuGet.MSSigning.Extensions.FuncTest.Commands
                     // Code Sign EKU needs trust to a root authority
                     // Add the cert to Root CA list in LocalMachine as it does not prompt a dialog
                     // This makes all the associated tests to require admin privilege
-                    _trustedTestCertWithPrivateKey = TestCertificate.Generate(actionGenerator).WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.LocalMachine);
+                    var testCert = TestCertificate.Generate(actionGenerator);
+                    if (RuntimeEnvironmentHelper.IsWindows)
+                    {
+                        _trustedTestCertWithPrivateKey = testCert.WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.LocalMachine);
+                    }
+                    else
+                    {
+                        _trustedTestCertWithPrivateKey = testCert.WithPrivateKeyAndTrust(StoreName.My, StoreLocation.CurrentUser);
+                    }
                 }
 
                 return _trustedTestCertWithPrivateKey;
@@ -62,7 +71,15 @@ namespace NuGet.MSSigning.Extensions.FuncTest.Commands
                     // Code Sign EKU needs trust to a root authority
                     // Add the cert to Root CA list in LocalMachine as it does not prompt a dialog
                     // This makes all the associated tests to require admin privilege
-                    _trustedTestCertWithoutPrivateKey = TestCertificate.Generate(actionGenerator).WithTrust(StoreName.Root, StoreLocation.LocalMachine);
+                    var testCert = TestCertificate.Generate(actionGenerator);
+                    if (RuntimeEnvironmentHelper.IsWindows)
+                    {
+                        _trustedTestCertWithoutPrivateKey = testCert.WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.LocalMachine);
+                    }
+                    else
+                    {
+                        _trustedTestCertWithoutPrivateKey = testCert.WithPrivateKeyAndTrust(StoreName.My, StoreLocation.CurrentUser);
+                    }
                 }
 
                 return _trustedTestCertWithoutPrivateKey;
@@ -99,10 +116,21 @@ namespace NuGet.MSSigning.Extensions.FuncTest.Commands
             var intermediateCa = rootCa.CreateIntermediateCertificateAuthority();
             var rootCertificate = new X509Certificate2(rootCa.Certificate.GetEncoded());
 
-            _trustedTimestampRoot = TrustedTestCert.Create(
-                rootCertificate,
-                StoreName.Root,
-                StoreLocation.LocalMachine);
+            if (RuntimeEnvironmentHelper.IsWindows)
+            {
+                _trustedTimestampRoot = TrustedTestCert.Create(
+                    rootCertificate,
+                    StoreName.Root,
+                    StoreLocation.LocalMachine);
+            }
+            else
+            {
+                _trustedTimestampRoot = TrustedTestCert.Create(
+                    rootCertificate,
+                    StoreName.My,
+                    StoreLocation.CurrentUser);
+            }
+
 
             var ca = intermediateCa;
 

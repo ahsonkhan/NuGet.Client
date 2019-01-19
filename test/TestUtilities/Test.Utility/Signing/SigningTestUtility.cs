@@ -138,7 +138,15 @@ namespace Test.Utility.Signing
                         IsCA = true
                     };
 
-                    cert = TestCertificate.Generate(actionGenerator, chainCertificateRequest).WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.LocalMachine);
+                    var temp = TestCertificate.Generate(actionGenerator, chainCertificateRequest);
+                    if (RuntimeEnvironmentHelper.IsWindows)
+                    {
+                        cert = temp.WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.LocalMachine);
+                    }
+                    else
+                    {
+                        cert = temp.WithPrivateKeyAndTrust(StoreName.My, StoreLocation.CurrentUser);
+                    }
                     issuer = cert;
                 }
                 else if (i < length - 1) // intermediate CA cert
@@ -151,7 +159,15 @@ namespace Test.Utility.Signing
                         Issuer = issuer.Source.Cert
                     };
 
-                    cert = TestCertificate.Generate(actionGenerator, chainCertificateRequest).WithPrivateKeyAndTrust(StoreName.CertificateAuthority, StoreLocation.LocalMachine);
+                    var temp = TestCertificate.Generate(actionGenerator, chainCertificateRequest);
+                    if (RuntimeEnvironmentHelper.IsWindows)
+                    {
+                        cert = temp.WithPrivateKeyAndTrust(StoreName.CertificateAuthority, StoreLocation.LocalMachine);
+                    }
+                    else
+                    {
+                        cert = temp.WithPrivateKeyAndTrust(StoreName.My, StoreLocation.CurrentUser);
+                    }
                     issuer = cert;
                 }
                 else // leaf cert
@@ -165,7 +181,15 @@ namespace Test.Utility.Signing
                         Issuer = issuer.Source.Cert
                     };
 
-                    cert = TestCertificate.Generate(actionGenerator, chainCertificateRequest).WithPrivateKeyAndTrust(StoreName.My, StoreLocation.LocalMachine);
+                    var temp = TestCertificate.Generate(actionGenerator, chainCertificateRequest);
+                    if (RuntimeEnvironmentHelper.IsWindows)
+                    {
+                        cert = temp.WithPrivateKeyAndTrust(StoreName.My, StoreLocation.LocalMachine);
+                    }
+                    else
+                    {
+                        cert = temp.WithPrivateKeyAndTrust(StoreName.My, StoreLocation.CurrentUser);
+                    }
                 }
 
                 certChain.Add(cert);
@@ -528,7 +552,15 @@ namespace Test.Utility.Signing
             // Code Sign EKU needs trust to a root authority
             // Add the cert to Root CA list in LocalMachine as it does not prompt a dialog
             // This makes all the associated tests to require admin privilege
-            return TestCertificate.Generate(actionGenerator).WithTrust(StoreName.Root, StoreLocation.LocalMachine);
+            var testCert = TestCertificate.Generate(actionGenerator);
+            if (RuntimeEnvironmentHelper.IsWindows)
+            {
+                return testCert.WithTrust(StoreName.Root, StoreLocation.LocalMachine);
+            }
+            else
+            {
+                return testCert.WithTrust(StoreName.My, StoreLocation.CurrentUser);
+            }
         }
 
         public static TrustedTestCert<TestCertificate> GenerateTrustedTestCertificateExpired()
@@ -538,7 +570,15 @@ namespace Test.Utility.Signing
             // Code Sign EKU needs trust to a root authority
             // Add the cert to Root CA list in LocalMachine as it does not prompt a dialog
             // This makes all the associated tests to require admin privilege
-            return TestCertificate.Generate(actionGenerator).WithTrust(StoreName.Root, StoreLocation.LocalMachine);
+            var testCert = TestCertificate.Generate(actionGenerator);
+            if (RuntimeEnvironmentHelper.IsWindows)
+            {
+                return testCert.WithTrust(StoreName.Root, StoreLocation.LocalMachine);
+            }
+            else
+            {
+                return testCert.WithTrust(StoreName.My, StoreLocation.CurrentUser);
+            }
         }
 
         public static TrustedTestCert<TestCertificate> GenerateTrustedTestCertificateNotYetValid()
@@ -548,7 +588,15 @@ namespace Test.Utility.Signing
             // Code Sign EKU needs trust to a root authority
             // Add the cert to Root CA list in LocalMachine as it does not prompt a dialog
             // This makes all the associated tests to require admin privilege
-            return TestCertificate.Generate(actionGenerator).WithTrust(StoreName.Root, StoreLocation.LocalMachine);
+            var testCert = TestCertificate.Generate(actionGenerator);
+            if (RuntimeEnvironmentHelper.IsWindows)
+            {
+                return testCert.WithTrust(StoreName.Root, StoreLocation.LocalMachine);
+            }
+            else
+            {
+                return testCert.WithTrust(StoreName.My, StoreLocation.CurrentUser);
+            }
         }
 
         public static TrustedTestCert<TestCertificate> GenerateTrustedTestCertificateThatExpiresIn10Seconds()
@@ -558,7 +606,15 @@ namespace Test.Utility.Signing
             // Code Sign EKU needs trust to a root authority
             // Add the cert to Root CA list in LocalMachine as it does not prompt a dialog
             // This makes all the associated tests to require admin privilege
-            return TestCertificate.Generate(actionGenerator).WithTrust(StoreName.Root, StoreLocation.LocalMachine);
+            var testCert = TestCertificate.Generate(actionGenerator);
+            if (RuntimeEnvironmentHelper.IsWindows)
+            {
+                return testCert.WithTrust(StoreName.Root, StoreLocation.LocalMachine);
+            }
+            else
+            {
+                return testCert.WithTrust(StoreName.My, StoreLocation.CurrentUser);
+            }
         }
 
         public static bool AreVerifierSettingsEqual(SignedPackageVerifierSettings first, SignedPackageVerifierSettings second)

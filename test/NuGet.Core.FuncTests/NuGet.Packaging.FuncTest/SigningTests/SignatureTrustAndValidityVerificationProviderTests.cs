@@ -3161,11 +3161,22 @@ namespace NuGet.Packaging.FuncTest
         {
             var rootCertificate = certificateChain.Last();
 
-            return TrustedTestCert.Create(
-                new X509Certificate2(rootCertificate),
-                StoreName.Root,
-                StoreLocation.LocalMachine,
-                maximumValidityPeriod: TimeSpan.MaxValue);
+            if (RuntimeEnvironmentHelper.IsWindows)
+            {
+                return TrustedTestCert.Create(
+                    new X509Certificate2(rootCertificate),
+                    StoreName.Root,
+                    StoreLocation.LocalMachine,
+                    maximumValidityPeriod: TimeSpan.MaxValue);
+            }
+            else
+            {
+                return TrustedTestCert.Create(
+                    new X509Certificate2(rootCertificate),
+                    StoreName.My,
+                    StoreLocation.CurrentUser,
+                    maximumValidityPeriod: TimeSpan.MaxValue);
+            }
         }
     }
 }

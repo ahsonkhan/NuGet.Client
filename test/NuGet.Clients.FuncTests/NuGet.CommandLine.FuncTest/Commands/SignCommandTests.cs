@@ -659,7 +659,7 @@ namespace NuGet.CommandLine.FuncTest.Commands
                 firstResult.AllOutput.Should().Contain(string.Format(_invalidPasswordErrorCode, pfxPath));
             }
         }
-
+#if IS_DESKTOP
         [CIOnlyFact]
         public async Task SignCommand_SignPackageWithUntrustedSelfIssuedCertificateInCertificateStoreAsync()
         {
@@ -714,5 +714,6 @@ namespace NuGet.CommandLine.FuncTest.Commands
                 }
             }
         }
+#endif
     }
 }

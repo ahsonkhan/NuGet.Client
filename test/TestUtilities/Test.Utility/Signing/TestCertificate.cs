@@ -36,7 +36,7 @@ namespace Test.Utility.Signing
         /// Trust the PublicCert cert for the life of the object.
         /// </summary>
         /// <remarks>Dispose of the object returned!</remarks>
-        public TrustedTestCert<TestCertificate> WithTrust(StoreName storeName = StoreName.TrustedPeople, StoreLocation storeLocation = StoreLocation.CurrentUser)
+        public TrustedTestCert<TestCertificate> WithTrust(StoreName storeName = StoreName.My, StoreLocation storeLocation = StoreLocation.CurrentUser)
         {
             return new TrustedTestCert<TestCertificate>(this, e => PublicCert, storeName, storeLocation);
         }
@@ -45,7 +45,7 @@ namespace Test.Utility.Signing
         /// Trust the PublicCert cert for the life of the object.
         /// </summary>
         /// <remarks>Dispose of the object returned!</remarks>
-        public TrustedTestCert<TestCertificate> WithPrivateKeyAndTrust(StoreName storeName = StoreName.TrustedPeople, StoreLocation storeLocation = StoreLocation.CurrentUser)
+        public TrustedTestCert<TestCertificate> WithPrivateKeyAndTrust(StoreName storeName = StoreName.My, StoreLocation storeLocation = StoreLocation.CurrentUser)
         {
             return new TrustedTestCert<TestCertificate>(this, e => PublicCertWithPrivateKey, storeName, storeLocation);
         }
