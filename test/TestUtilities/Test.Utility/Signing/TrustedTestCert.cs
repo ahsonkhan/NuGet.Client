@@ -7,6 +7,8 @@ using System.IO;
 using System.Security.Cryptography.X509Certificates;
 using NuGet.Common;
 using NuGet.Test.Utility;
+using Org.BouncyCastle.OpenSsl;
+using Org.BouncyCastle.Security;
 
 namespace Test.Utility.Signing
 {
@@ -114,11 +116,14 @@ namespace Test.Utility.Signing
         {
             var certDir = @"/usr/share/ca-certificates/nuget";
 
-            var exportedCert = TrustedCert.Export(X509ContentType.Cert);
-
             var tempCertFileName = "NuGetTest-" + Guid.NewGuid().ToString() + ".crt";
             var tempCertPath = Path.Combine(dir, tempCertFileName);
-            File.WriteAllBytes(tempCertPath, exportedCert);
+
+            var bcCert = DotNetUtilities.FromX509Certificate(TrustedCert);
+            var pemWriter = new PemWriter(new StreamWriter(File.Open(tempCertPath, FileMode.Create)));
+            pemWriter.WriteObject(bcCert);
+            pemWriter.Writer.Flush();
+            pemWriter.Writer.Close();
 
             _systemTrustedCertPath = Path.Combine(certDir, tempCertFileName);
 
