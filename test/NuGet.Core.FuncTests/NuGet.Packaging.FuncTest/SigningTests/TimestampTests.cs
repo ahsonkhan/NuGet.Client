@@ -38,8 +38,9 @@ namespace NuGet.Packaging.FuncTest
             using (var responders = new DisposableList<IDisposable>())
             using (var packageStream = await nupkg.CreateAsStreamAsync())
             using (var testCertificate = new X509Certificate2(_trustedTestCert.Source.Cert))
+            using (var dir = TestDirectory.Create())
             {
-                var ca = CreateOfflineRevocationCA(testServer, responders);
+                var ca = CreateOfflineRevocationCA(testServer, responders, dir);
                 var timestampService = TimestampService.Create(ca);
 
                 responders.Add(testServer.RegisterResponder(timestampService));
@@ -84,7 +85,7 @@ namespace NuGet.Packaging.FuncTest
             }
         }
 
-        private CertificateAuthority CreateOfflineRevocationCA(ISigningTestServer testServer, DisposableList<IDisposable> responders)
+        private CertificateAuthority CreateOfflineRevocationCA(ISigningTestServer testServer, DisposableList<IDisposable> responders, TestDirectory dir)
         {
             var rootCa = CertificateAuthority.Create(testServer.Url);
             var intermediateCa = rootCa.CreateIntermediateCertificateAuthority();
@@ -96,21 +97,26 @@ namespace NuGet.Packaging.FuncTest
                 var trustedServerRoot = TrustedTestCert.Create(
                     rootCertificate,
                     StoreName.Root,
-                    StoreLocation.LocalMachine);
+                    StoreLocation.LocalMachine,
+                    dir);
             }
             else if (RuntimeEnvironmentHelper.IsLinux)
             {
                 var trustedServerRoot = TrustedTestCert.Create(
                     rootCertificate,
                     StoreName.Root,
-                    StoreLocation.CurrentUser);
+                    StoreLocation.CurrentUser,
+                    dir,
+                    trustInLinux: true);
             }
             else
             {
                 var trustedServerRoot = TrustedTestCert.Create(
                     rootCertificate,
                     StoreName.My,
-                    StoreLocation.CurrentUser);
+                    StoreLocation.CurrentUser,
+                    dir,
+                    trustInMac: true);
             }
 
             var ca = intermediateCa;

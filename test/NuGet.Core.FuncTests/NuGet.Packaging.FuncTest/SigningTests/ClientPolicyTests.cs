@@ -24,12 +24,14 @@ namespace NuGet.Packaging.FuncTest
         private readonly SigningTestFixture _testFixture;
         private TrustedTestCert<TestCertificate> _trustedAuthorTestCert;
         private TrustedTestCert<TestCertificate> _trustedRepoTestCert;
+        private readonly TestDirectory _certDir;
 
         public ClientPolicyTests(SigningTestFixture fixture)
         {
             _testFixture = fixture ?? throw new ArgumentNullException(nameof(fixture));
+            _certDir = fixture.CertificatesDirectory;
             _trustedAuthorTestCert = _testFixture.TrustedTestCertificate;
-            _trustedRepoTestCert = SigningTestUtility.GenerateTrustedTestCertificate();
+            _trustedRepoTestCert = SigningTestUtility.GenerateTrustedTestCertificate(_certDir);
         }
 
         [CIOnlyTheory]

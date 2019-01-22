@@ -38,11 +38,13 @@ namespace NuGet.CommandLine.FuncTest.Commands
         private SignCommandTestFixture _testFixture;
         private TrustedTestCert<TestCertificate> _trustedTestCert;
         private readonly string _nugetExePath;
+        private readonly TestDirectory _certDir;
 
         public RestoreCommandSignPackagesTests(SignCommandTestFixture fixture)
         {
             _testFixture = fixture ?? throw new ArgumentNullException(nameof(fixture));
-            _trustedTestCert = SigningTestUtility.GenerateTrustedTestCertificate();
+            _certDir = fixture.CertificatesDirectory;
+            _trustedTestCert = SigningTestUtility.GenerateTrustedTestCertificate(_certDir);
             _nugetExePath = _testFixture.NuGetExePath;
         }
 

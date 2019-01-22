@@ -337,7 +337,7 @@ namespace NuGet.Commands.Test
             var packageContext = new SimpleTestPackageContext();
 
             using (var directory = TestDirectory.Create())
-            using (var trustedCert = SigningTestUtility.GenerateTrustedTestCertificate())
+            using (var trustedCert = SigningTestUtility.GenerateTrustedTestCertificate(directory))
             {
                 var signedPackagePath = await SignedArchiveTestUtility.AuthorSignPackageAsync(trustedCert.Source.Cert, packageContext, directory);
 
@@ -376,7 +376,7 @@ namespace NuGet.Commands.Test
                 });
 
             using (var directory = TestDirectory.Create())
-            using (var trustedCert = SigningTestUtility.GenerateTrustedTestCertificate())
+            using (var trustedCert = SigningTestUtility.GenerateTrustedTestCertificate(directory))
             {
                 var signedPackagePath = await SignedArchiveTestUtility.AuthorSignPackageAsync(trustedCert.Source.Cert, packageContext, directory);
 
@@ -416,7 +416,7 @@ namespace NuGet.Commands.Test
                 });
 
             using (var directory = TestDirectory.Create())
-            using (var trustedCert = SigningTestUtility.GenerateTrustedTestCertificate())
+            using (var trustedCert = SigningTestUtility.GenerateTrustedTestCertificate(directory))
             {
                 var signedPackagePath = await SignedArchiveTestUtility.RepositorySignPackageAsync(trustedCert.Source.Cert, packageContext, directory, new Uri(repoServiceIndex));
 
@@ -453,7 +453,8 @@ namespace NuGet.Commands.Test
                 .Setup(p => p.GetTrustedSigners())
                 .Returns(new List<TrustedSignerItem>());
 
-            using (var trustedCert = SigningTestUtility.GenerateTrustedTestCertificate())
+            using (var directory = TestDirectory.Create())
+            using (var trustedCert = SigningTestUtility.GenerateTrustedTestCertificate(directory))
             {
                 var content = new SignatureContent(
                      SigningSpecifications.V1,
@@ -501,7 +502,7 @@ namespace NuGet.Commands.Test
                 .Returns(new List<TrustedSignerItem>());
 
             using (var directory = TestDirectory.Create())
-            using (var trustedCert = SigningTestUtility.GenerateTrustedTestCertificate())
+            using (var trustedCert = SigningTestUtility.GenerateTrustedTestCertificate(directory))
             {
                 var certFingerprint = CertificateUtility.GetHashString(trustedCert.Source.Cert, HashAlgorithmName.SHA256);
 
@@ -546,7 +547,7 @@ namespace NuGet.Commands.Test
                 .Returns(new List<TrustedSignerItem>());
 
             using (var directory = TestDirectory.Create())
-            using (var trustedCert = SigningTestUtility.GenerateTrustedTestCertificate())
+            using (var trustedCert = SigningTestUtility.GenerateTrustedTestCertificate(directory))
             {
                 var certFingerprint = CertificateUtility.GetHashString(trustedCert.Source.Cert, HashAlgorithmName.SHA256);
                 var expectedOwners = new List<string>() { "one", "two", "three" };
@@ -592,7 +593,7 @@ namespace NuGet.Commands.Test
                 .Returns(new List<TrustedSignerItem>());
 
             using (var directory = TestDirectory.Create())
-            using (var trustedCert = SigningTestUtility.GenerateTrustedTestCertificate())
+            using (var trustedCert = SigningTestUtility.GenerateTrustedTestCertificate(directory))
             {
                 var certFingerprint = CertificateUtility.GetHashString(trustedCert.Source.Cert, HashAlgorithmName.SHA256);
                 var expectedOwners = new List<string>() { "one", "two", "three" };
@@ -638,8 +639,8 @@ namespace NuGet.Commands.Test
                 .Returns(new List<TrustedSignerItem>());
 
             using (var directory = TestDirectory.Create())
-            using (var authorCert = SigningTestUtility.GenerateTrustedTestCertificate())
-            using (var repoCert = SigningTestUtility.GenerateTrustedTestCertificate())
+            using (var authorCert = SigningTestUtility.GenerateTrustedTestCertificate(directory))
+            using (var repoCert = SigningTestUtility.GenerateTrustedTestCertificate(directory))
             {
                 var certFingerprint = CertificateUtility.GetHashString(repoCert.Source.Cert, HashAlgorithmName.SHA256);
 
@@ -685,8 +686,8 @@ namespace NuGet.Commands.Test
                 .Returns(new List<TrustedSignerItem>());
 
             using (var directory = TestDirectory.Create())
-            using (var authorCert = SigningTestUtility.GenerateTrustedTestCertificate())
-            using (var repoCert = SigningTestUtility.GenerateTrustedTestCertificate())
+            using (var authorCert = SigningTestUtility.GenerateTrustedTestCertificate(directory))
+            using (var repoCert = SigningTestUtility.GenerateTrustedTestCertificate(directory))
             {
                 var certFingerprint = CertificateUtility.GetHashString(repoCert.Source.Cert, HashAlgorithmName.SHA256);
                 var expectedOwners = new List<string>() { "one", "two", "three" };
@@ -733,8 +734,8 @@ namespace NuGet.Commands.Test
                 .Returns(new List<TrustedSignerItem>());
 
             using (var directory = TestDirectory.Create())
-            using (var authorCert = SigningTestUtility.GenerateTrustedTestCertificate())
-            using (var repoCert = SigningTestUtility.GenerateTrustedTestCertificate())
+            using (var authorCert = SigningTestUtility.GenerateTrustedTestCertificate(directory))
+            using (var repoCert = SigningTestUtility.GenerateTrustedTestCertificate(directory))
             {
                 var certFingerprint = CertificateUtility.GetHashString(repoCert.Source.Cert, HashAlgorithmName.SHA256);
                 var expectedOwners = new List<string>() { "one", "two", "three" };
@@ -780,7 +781,7 @@ namespace NuGet.Commands.Test
                 .Returns(new List<TrustedSignerItem>());
 
             using (var directory = TestDirectory.Create())
-            using (var authorCert = SigningTestUtility.GenerateTrustedTestCertificate())
+            using (var authorCert = SigningTestUtility.GenerateTrustedTestCertificate(directory))
             {
                 var certFingerprint = CertificateUtility.GetHashString(authorCert.Source.Cert, HashAlgorithmName.SHA256);
 
@@ -822,7 +823,7 @@ namespace NuGet.Commands.Test
                 .Returns(new List<TrustedSignerItem>());
 
             using (var directory = TestDirectory.Create())
-            using (var authorCert = SigningTestUtility.GenerateTrustedTestCertificate())
+            using (var authorCert = SigningTestUtility.GenerateTrustedTestCertificate(directory))
             {
                 var certFingerprint = CertificateUtility.GetHashString(authorCert.Source.Cert, HashAlgorithmName.SHA256);
 

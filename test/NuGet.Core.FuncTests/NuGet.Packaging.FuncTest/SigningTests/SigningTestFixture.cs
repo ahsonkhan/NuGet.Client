@@ -8,6 +8,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 using NuGet.Common;
 using NuGet.Packaging.Signing;
+using NuGet.Test.Utility;
 using Test.Utility.Signing;
 
 namespace NuGet.Packaging.FuncTest
@@ -30,6 +31,7 @@ namespace NuGet.Packaging.FuncTest
         private Lazy<Task<CertificateAuthority>> _defaultTrustedCertificateAuthority;
         private Lazy<Task<TimestampService>> _defaultTrustedTimestampService;
         private readonly DisposableList<IDisposable> _responders;
+        private readonly TestDirectory _certDir;
 
         public SigningTestFixture()
         {
@@ -37,7 +39,10 @@ namespace NuGet.Packaging.FuncTest
             _defaultTrustedCertificateAuthority = new Lazy<Task<CertificateAuthority>>(CreateDefaultTrustedCertificateAuthorityAsync);
             _defaultTrustedTimestampService = new Lazy<Task<TimestampService>>(CreateDefaultTrustedTimestampServiceAsync);
             _responders = new DisposableList<IDisposable>();
+            _certDir = TestDirectory.Create();
         }
+
+        public TestDirectory CertificatesDirectory => _certDir;
 
         public TrustedTestCert<TestCertificate> TrustedTestCertificate
         {
@@ -45,7 +50,7 @@ namespace NuGet.Packaging.FuncTest
             {
                 if (_trustedTestCert == null)
                 {
-                    _trustedTestCert = SigningTestUtility.GenerateTrustedTestCertificate();
+                    _trustedTestCert = SigningTestUtility.GenerateTrustedTestCertificate(_certDir);
                 }
 
                 return _trustedTestCert;
@@ -60,7 +65,7 @@ namespace NuGet.Packaging.FuncTest
             {
                 if (_trustedRepositoryCertificate == null)
                 {
-                    _trustedRepositoryCertificate = SigningTestUtility.GenerateTrustedTestCertificate();
+                    _trustedRepositoryCertificate = SigningTestUtility.GenerateTrustedTestCertificate(_certDir);
                 }
 
                 return _trustedRepositoryCertificate;
@@ -73,7 +78,7 @@ namespace NuGet.Packaging.FuncTest
             {
                 if (_trustedTestCertExpired == null)
                 {
-                    _trustedTestCertExpired = SigningTestUtility.GenerateTrustedTestCertificateExpired();
+                    _trustedTestCertExpired = SigningTestUtility.GenerateTrustedTestCertificateExpired(_certDir);
                 }
 
                 return _trustedTestCertExpired;
@@ -86,7 +91,7 @@ namespace NuGet.Packaging.FuncTest
             {
                 if (_trustedTestCertNotYetValid == null)
                 {
-                    _trustedTestCertNotYetValid = SigningTestUtility.GenerateTrustedTestCertificateNotYetValid();
+                    _trustedTestCertNotYetValid = SigningTestUtility.GenerateTrustedTestCertificateNotYetValid(_certDir);
                 }
 
                 return _trustedTestCertNotYetValid;
@@ -94,7 +99,7 @@ namespace NuGet.Packaging.FuncTest
         }
 
         // We should not memoize this call because it is a time-sensitive operation.
-        public TrustedTestCert<TestCertificate> TrustedTestCertificateWillExpireIn10Seconds => SigningTestUtility.GenerateTrustedTestCertificateThatExpiresIn10Seconds();
+        public TrustedTestCert<TestCertificate> TrustedTestCertificateWillExpireIn10Seconds => SigningTestUtility.GenerateTrustedTestCertificateThatExpiresIn10Seconds(_certDir);
 
         // We should not memoize this call because it is a time-sensitive operation.
         public TestCertificate UntrustedTestCertificateWillExpireIn10Seconds => TestCertificate.Generate(SigningTestUtility.CertificateModificationGeneratorExpireIn10Seconds);
@@ -118,18 +123,18 @@ namespace NuGet.Packaging.FuncTest
                         TrustedTestCert<TestCertificate> testCertificate2 = null;
                         if (RuntimeEnvironmentHelper.IsWindows)
                         {
-                            testCertificate1 = temp1.WithTrust(StoreName.Root, StoreLocation.LocalMachine);
-                            testCertificate2 = temp2.WithTrust(StoreName.Root, StoreLocation.LocalMachine);
+                            testCertificate1 = temp1.WithTrust(StoreName.Root, StoreLocation.LocalMachine, _certDir);
+                            testCertificate2 = temp2.WithTrust(StoreName.Root, StoreLocation.LocalMachine, _certDir);
                         }
                         else if (RuntimeEnvironmentHelper.IsLinux)
                         {
-                            testCertificate1 = temp1.WithTrust(StoreName.Root, StoreLocation.CurrentUser);
-                            testCertificate2 = temp2.WithTrust(StoreName.Root, StoreLocation.CurrentUser);
+                            testCertificate1 = temp1.WithTrust(StoreName.Root, StoreLocation.CurrentUser, _certDir, trustInLinux: true);
+                            testCertificate2 = temp2.WithTrust(StoreName.Root, StoreLocation.CurrentUser, _certDir, trustInLinux: true);
                         }
                         else
                         {
-                            testCertificate1 = temp1.WithTrust(StoreName.My, StoreLocation.CurrentUser);
-                            testCertificate2 = temp2.WithTrust(StoreName.My, StoreLocation.CurrentUser);
+                            testCertificate1 = temp1.WithTrust(StoreName.My, StoreLocation.CurrentUser, _certDir, trustInMac: true);
+                            testCertificate2 = temp2.WithTrust(StoreName.My, StoreLocation.CurrentUser, _certDir, trustInMac: true);
                         }
 
                         _trustedTestCertificateWithReissuedCertificate = new[]
@@ -214,21 +219,26 @@ namespace NuGet.Packaging.FuncTest
                 _trustedServerRoot = TrustedTestCert.Create(
                     rootCertificate,
                     StoreName.Root,
-                    StoreLocation.LocalMachine);
+                    StoreLocation.LocalMachine,
+                    _certDir);
             }
             else if (RuntimeEnvironmentHelper.IsLinux)
             {
                 _trustedServerRoot = TrustedTestCert.Create(
                     rootCertificate,
                     StoreName.Root,
-                    StoreLocation.CurrentUser);
+                    StoreLocation.CurrentUser,
+                    _certDir,
+                    trustInLinux: true);
             }
             else
             {
                 _trustedServerRoot = TrustedTestCert.Create(
                     rootCertificate,
                     StoreName.My,
-                    StoreLocation.CurrentUser);
+                    StoreLocation.CurrentUser,
+                    _certDir,
+                    trustInMac: true);
             }
 
             var ca = intermediateCa;
@@ -263,6 +273,7 @@ namespace NuGet.Packaging.FuncTest
             _trustedTestCertNotYetValid?.Dispose();
             _trustedServerRoot?.Dispose();
             _responders.Dispose();
+            _certDir.Dispose();
 
             if (_trustedTestCertificateWithReissuedCertificate != null)
             {

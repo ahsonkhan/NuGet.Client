@@ -118,9 +118,10 @@ namespace Test.Utility.Signing
         /// <param name="length">Length of the chain.</param>
         /// <param name="crlServerUri">Uri for crl server</param>
         /// <param name="crlLocalUri">Uri for crl local</param>
+        /// <param name="dir">Test directory to store certificates if needed</param>
         /// <param name="configureLeafCrl">Indicates if leaf crl should be configured</param>
         /// <returns>List of certificates representing a chain of certificates.</returns>
-        public static IList<TrustedTestCert<TestCertificate>> GenerateCertificateChain(int length, string crlServerUri, string crlLocalUri, bool configureLeafCrl = true)
+        public static IList<TrustedTestCert<TestCertificate>> GenerateCertificateChain(int length, string crlServerUri, string crlLocalUri, TestDirectory dir, bool configureLeafCrl = true)
         {
             var certChain = new List<TrustedTestCert<TestCertificate>>();
             var actionGenerator = CertificateModificationGeneratorForCodeSigningEkuCert;
@@ -141,15 +142,15 @@ namespace Test.Utility.Signing
                     var temp = TestCertificate.Generate(actionGenerator, chainCertificateRequest);
                     if (RuntimeEnvironmentHelper.IsWindows)
                     {
-                        cert = temp.WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.LocalMachine);
+                        cert = temp.WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.LocalMachine, dir);
                     }
                     else if (RuntimeEnvironmentHelper.IsLinux)
                     {
-                        cert = temp.WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.CurrentUser);
+                        cert = temp.WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.CurrentUser, dir, trustInLinux: true);
                     }
                     else
                     {
-                        cert = temp.WithPrivateKeyAndTrust(StoreName.My, StoreLocation.CurrentUser);
+                        cert = temp.WithPrivateKeyAndTrust(StoreName.My, StoreLocation.CurrentUser, dir, trustInMac: true);
                     }
                     issuer = cert;
                 }
@@ -166,15 +167,15 @@ namespace Test.Utility.Signing
                     var temp = TestCertificate.Generate(actionGenerator, chainCertificateRequest);
                     if (RuntimeEnvironmentHelper.IsWindows)
                     {
-                        cert = temp.WithPrivateKeyAndTrust(StoreName.CertificateAuthority, StoreLocation.LocalMachine);
+                        cert = temp.WithPrivateKeyAndTrust(StoreName.CertificateAuthority, StoreLocation.LocalMachine, dir);
                     }
                     else if (RuntimeEnvironmentHelper.IsLinux)
                     {
-                        cert = temp.WithPrivateKeyAndTrust(StoreName.CertificateAuthority, StoreLocation.CurrentUser);
+                        cert = temp.WithPrivateKeyAndTrust(StoreName.CertificateAuthority, StoreLocation.CurrentUser, dir, trustInLinux: true);
                     }
                     else
                     {
-                        cert = temp.WithPrivateKeyAndTrust(StoreName.My, StoreLocation.CurrentUser);
+                        cert = temp.WithPrivateKeyAndTrust(StoreName.My, StoreLocation.CurrentUser, dir, trustInMac: true);
                     }
                     issuer = cert;
                 }
@@ -192,11 +193,11 @@ namespace Test.Utility.Signing
                     var temp = TestCertificate.Generate(actionGenerator, chainCertificateRequest);
                     if (RuntimeEnvironmentHelper.IsWindows)
                     {
-                        cert = temp.WithPrivateKeyAndTrust(StoreName.My, StoreLocation.LocalMachine);
+                        cert = temp.WithPrivateKeyAndTrust(StoreName.My, StoreLocation.LocalMachine, dir);
                     }
                     else
                     {
-                        cert = temp.WithPrivateKeyAndTrust(StoreName.My, StoreLocation.CurrentUser);
+                        cert = temp.WithPrivateKeyAndTrust(StoreName.My, StoreLocation.CurrentUser, dir);
                     }
                 }
 
@@ -553,7 +554,7 @@ namespace Test.Utility.Signing
             return new X509Certificate2(cert.Export(X509ContentType.Pfx, password), password, X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.Exportable);
         }
 
-        public static TrustedTestCert<TestCertificate> GenerateTrustedTestCertificate()
+        public static TrustedTestCert<TestCertificate> GenerateTrustedTestCertificate(TestDirectory certDir)
         {
             var actionGenerator = CertificateModificationGeneratorForCodeSigningEkuCert;
 
@@ -563,19 +564,19 @@ namespace Test.Utility.Signing
             var testCert = TestCertificate.Generate(actionGenerator);
             if (RuntimeEnvironmentHelper.IsWindows)
             {
-                return testCert.WithTrust(StoreName.Root, StoreLocation.LocalMachine);
+                return testCert.WithTrust(StoreName.Root, StoreLocation.LocalMachine, certDir);
             }
             else if (RuntimeEnvironmentHelper.IsLinux)
             {
-                return testCert.WithTrust(StoreName.Root, StoreLocation.CurrentUser);
+                return testCert.WithTrust(StoreName.Root, StoreLocation.CurrentUser, certDir, trustInLinux: true);
             }
             else
             {
-                return testCert.WithTrust(StoreName.My, StoreLocation.CurrentUser);
+                return testCert.WithTrust(StoreName.My, StoreLocation.CurrentUser, certDir, trustInMac: true);
             }
         }
 
-        public static TrustedTestCert<TestCertificate> GenerateTrustedTestCertificateExpired()
+        public static TrustedTestCert<TestCertificate> GenerateTrustedTestCertificateExpired(TestDirectory certDir)
         {
             var actionGenerator = CertificateModificationGeneratorExpiredCert;
 
@@ -585,19 +586,19 @@ namespace Test.Utility.Signing
             var testCert = TestCertificate.Generate(actionGenerator);
             if (RuntimeEnvironmentHelper.IsWindows)
             {
-                return testCert.WithTrust(StoreName.Root, StoreLocation.LocalMachine);
+                return testCert.WithTrust(StoreName.Root, StoreLocation.LocalMachine, certDir);
             }
             else if (RuntimeEnvironmentHelper.IsLinux)
             {
-                return testCert.WithTrust(StoreName.Root, StoreLocation.CurrentUser);
+                return testCert.WithTrust(StoreName.Root, StoreLocation.CurrentUser, certDir, trustInLinux: true);
             }
             else
             {
-                return testCert.WithTrust(StoreName.My, StoreLocation.CurrentUser);
+                return testCert.WithTrust(StoreName.My, StoreLocation.CurrentUser, certDir, trustInMac: true);
             }
         }
 
-        public static TrustedTestCert<TestCertificate> GenerateTrustedTestCertificateNotYetValid()
+        public static TrustedTestCert<TestCertificate> GenerateTrustedTestCertificateNotYetValid(TestDirectory certDir)
         {
             var actionGenerator = CertificateModificationGeneratorNotYetValidCert;
 
@@ -607,19 +608,19 @@ namespace Test.Utility.Signing
             var testCert = TestCertificate.Generate(actionGenerator);
             if (RuntimeEnvironmentHelper.IsWindows)
             {
-                return testCert.WithTrust(StoreName.Root, StoreLocation.LocalMachine);
+                return testCert.WithTrust(StoreName.Root, StoreLocation.LocalMachine, certDir);
             }
             else if (RuntimeEnvironmentHelper.IsLinux)
             {
-                return testCert.WithTrust(StoreName.Root, StoreLocation.CurrentUser);
+                return testCert.WithTrust(StoreName.Root, StoreLocation.CurrentUser, certDir, trustInLinux: true);
             }
             else
             {
-                return testCert.WithTrust(StoreName.My, StoreLocation.CurrentUser);
+                return testCert.WithTrust(StoreName.My, StoreLocation.CurrentUser, certDir, trustInMac: true);
             }
         }
 
-        public static TrustedTestCert<TestCertificate> GenerateTrustedTestCertificateThatExpiresIn10Seconds()
+        public static TrustedTestCert<TestCertificate> GenerateTrustedTestCertificateThatExpiresIn10Seconds(TestDirectory certDir)
         {
             var actionGenerator = CertificateModificationGeneratorExpireIn10Seconds;
 
@@ -629,15 +630,15 @@ namespace Test.Utility.Signing
             var testCert = TestCertificate.Generate(actionGenerator);
             if (RuntimeEnvironmentHelper.IsWindows)
             {
-                return testCert.WithTrust(StoreName.Root, StoreLocation.LocalMachine);
+                return testCert.WithTrust(StoreName.Root, StoreLocation.LocalMachine, certDir);
             }
             else if (RuntimeEnvironmentHelper.IsLinux)
             {
-                return testCert.WithTrust(StoreName.Root, StoreLocation.CurrentUser);
+                return testCert.WithTrust(StoreName.Root, StoreLocation.CurrentUser, certDir, trustInLinux: true);
             }
             else
             {
-                return testCert.WithTrust(StoreName.My, StoreLocation.CurrentUser);
+                return testCert.WithTrust(StoreName.My, StoreLocation.CurrentUser, certDir, trustInMac: true);
             }
         }
 

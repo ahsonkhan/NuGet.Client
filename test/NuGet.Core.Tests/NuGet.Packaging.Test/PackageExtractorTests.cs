@@ -1832,7 +1832,7 @@ namespace NuGet.Packaging.Test
         public async Task ExtractPackageAsync_RequireMode_EmptyRepoAllowList_ErrorAsync()
         {
             using (var dir = TestDirectory.Create())
-            using (var repoCertificate = new X509Certificate2(SigningTestUtility.GenerateTrustedTestCertificate().Source.Cert))
+            using (var repoCertificate = new X509Certificate2(SigningTestUtility.GenerateTrustedTestCertificate(dir).Source.Cert))
             {
                 var nupkg = new SimpleTestPackageContext();
                 var resolver = new PackagePathResolver(dir);
@@ -1890,7 +1890,7 @@ namespace NuGet.Packaging.Test
         public async Task ExtractPackageAsync_RequireMode_NoMatchInClientAllowList_ErrorAsync()
         {
             using (var dir = TestDirectory.Create())
-            using (var repoCertificate = new X509Certificate2(SigningTestUtility.GenerateTrustedTestCertificate().Source.Cert))
+            using (var repoCertificate = new X509Certificate2(SigningTestUtility.GenerateTrustedTestCertificate(dir).Source.Cert))
             {
                 var nupkg = new SimpleTestPackageContext();
                 var resolver = new PackagePathResolver(dir);
@@ -1949,7 +1949,7 @@ namespace NuGet.Packaging.Test
         {
             // Arrange
             using (var dir = TestDirectory.Create())
-            using (var repoCertificate = new X509Certificate2(SigningTestUtility.GenerateTrustedTestCertificate().Source.Cert))
+            using (var repoCertificate = new X509Certificate2(SigningTestUtility.GenerateTrustedTestCertificate(dir).Source.Cert))
             {
                 var nupkg = new SimpleTestPackageContext();
                 var certificateFingerprint = SignatureTestUtility.GetFingerprint(repoCertificate, HashAlgorithmName.SHA256);
@@ -1991,8 +1991,8 @@ namespace NuGet.Packaging.Test
         {
             // Arrange
             using (var dir = TestDirectory.Create())
-            using (var repoCertificate = new X509Certificate2(SigningTestUtility.GenerateTrustedTestCertificate().Source.Cert))
-            using (var packageSignatureCertificate = SigningTestUtility.GenerateTrustedTestCertificate().Source.Cert)
+            using (var repoCertificate = new X509Certificate2(SigningTestUtility.GenerateTrustedTestCertificate(dir).Source.Cert))
+            using (var packageSignatureCertificate = SigningTestUtility.GenerateTrustedTestCertificate(dir).Source.Cert)
             {
                 var nupkg = new SimpleTestPackageContext();
 

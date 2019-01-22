@@ -2,7 +2,11 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Diagnostics;
+using System.IO;
 using System.Security.Cryptography.X509Certificates;
+using NuGet.Common;
+using NuGet.Test.Utility;
 
 namespace Test.Utility.Signing
 {
@@ -10,16 +14,22 @@ namespace Test.Utility.Signing
     {
         public static TrustedTestCert<X509Certificate2> Create(
             X509Certificate2 cert,
-            StoreName storeName = StoreName.My,
-            StoreLocation storeLocation = StoreLocation.CurrentUser,
-            TimeSpan? maximumValidityPeriod = null)
+            StoreName storeName,
+            StoreLocation storeLocation,
+            TestDirectory dir,
+            TimeSpan? maximumValidityPeriod = null,
+            bool trustInLinux = false,
+            bool trustInMac = false)
         {
             return new TrustedTestCert<X509Certificate2>(
                 cert,
                 x => x,
                 storeName,
                 storeLocation,
-                maximumValidityPeriod);
+                dir,
+                maximumValidityPeriod,
+                trustInLinux,
+                trustInMac);
         }
     }
 
@@ -40,11 +50,18 @@ namespace Test.Utility.Signing
 
         private bool _isDisposed;
 
+        private string _systemTrustedCertPath;
+
+        private readonly bool _trustedInMac;
+
         public TrustedTestCert(T source,
             Func<T, X509Certificate2> getCert,
             StoreName storeName,
             StoreLocation storeLocation,
-            TimeSpan? maximumValidityPeriod = null)
+            TestDirectory dir,
+            TimeSpan? maximumValidityPeriod = null,
+            bool trustInLinux = false,
+            bool trustInMac = false)
         {
             Source = source;
             TrustedCert = getCert(source);
@@ -62,6 +79,17 @@ namespace Test.Utility.Signing
             StoreName = storeName;
             StoreLocation = storeLocation;
             AddCertificateToStore();
+
+            if (trustInLinux && RuntimeEnvironmentHelper.IsLinux)
+            {
+                TrustCertInLinux(dir);
+            }
+            else if (trustInMac && RuntimeEnvironmentHelper.IsMacOSX)
+            {
+                _trustedInMac = true;
+                TrustCertInMac(dir);
+            }
+
             ExportCrl();
         }
 
@@ -82,6 +110,34 @@ namespace Test.Utility.Signing
             }
         }
 
+        private void TrustCertInLinux(TestDirectory dir)
+        {
+            var certDir = @"/usr/share/ca-certificates/nuget";
+
+            var exportedCert = TrustedCert.Export(X509ContentType.Cert);
+
+            var tempCertFileName = "NuGetTest-" + Guid.NewGuid().ToString() + ".crt";
+            var tempCertPath = Path.Combine(dir, tempCertFileName);
+            File.WriteAllBytes(tempCertPath, exportedCert);
+
+            _systemTrustedCertPath = Path.Combine(certDir, tempCertFileName);
+
+            Process.Start(@"/usr/bin/sudo", $@"cp {tempCertPath} {_systemTrustedCertPath}");
+            Process.Start(@"/usr/bin/sudo", @"update-ca-certificates");
+        }
+
+        private void TrustCertInMac(TestDirectory dir)
+        {
+            var exportedCert = TrustedCert.Export(X509ContentType.Cert);
+
+            var tempCertFileName = "NuGetTest-" + Guid.NewGuid().ToString() + ".cer";
+
+            _systemTrustedCertPath = Path.Combine(dir, tempCertFileName);
+            File.WriteAllBytes(_systemTrustedCertPath, exportedCert);
+
+            Process.Start(@"/usr/bin/sudo", $@"security -v add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain {_systemTrustedCertPath}");
+        }
+
         private void DisposeCrl()
         {
             var testCertificate = Source as TestCertificate;
@@ -99,6 +155,16 @@ namespace Test.Utility.Signing
                 using (_store)
                 {
                     _store.Remove(TrustedCert);
+                }
+
+                if (_systemTrustedCertPath != null && RuntimeEnvironmentHelper.IsLinux)
+                {
+                    Process.Start(@"/usr/bin/sudo", $@"rm {_systemTrustedCertPath}");
+                }
+
+                if (_trustedInMac && RuntimeEnvironmentHelper.IsMacOSX)
+                {
+                    Process.Start(@"/usr/bin/sudo", $@"security -v remove-trusted-cert -d {_systemTrustedCertPath}");
                 }
 
                 DisposeCrl();

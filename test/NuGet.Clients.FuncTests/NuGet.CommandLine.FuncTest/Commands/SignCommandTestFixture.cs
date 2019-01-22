@@ -44,6 +44,9 @@ namespace NuGet.CommandLine.FuncTest.Commands
         private Lazy<Task<CertificateAuthority>> _defaultTrustedCertificateAuthority;
         private Lazy<Task<TimestampService>> _defaultTrustedTimestampService;
         private readonly DisposableList<IDisposable> _responders;
+        private readonly TestDirectory _certDir;
+
+        public TestDirectory CertificatesDirectory => _certDir;
 
         public TrustedTestCert<TestCertificate> TrustedTestCertificate
         {
@@ -59,15 +62,15 @@ namespace NuGet.CommandLine.FuncTest.Commands
                     var testCert = TestCertificate.Generate(actionGenerator);
                     if (RuntimeEnvironmentHelper.IsWindows)
                     {
-                        _trustedTestCert = testCert.WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.LocalMachine);
+                        _trustedTestCert = testCert.WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.LocalMachine, _certDir);
                     }
                     else if (RuntimeEnvironmentHelper.IsLinux)
                     {
-                        _trustedTestCert = testCert.WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.CurrentUser);
+                        _trustedTestCert = testCert.WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.CurrentUser, _certDir, trustInLinux: true);
                     }
                     else
                     {
-                        _trustedTestCert = testCert.WithPrivateKeyAndTrust(StoreName.My, StoreLocation.CurrentUser);
+                        _trustedTestCert = testCert.WithPrivateKeyAndTrust(StoreName.My, StoreLocation.CurrentUser, _certDir, trustInMac: true);
                     }
                 }
 
@@ -88,15 +91,15 @@ namespace NuGet.CommandLine.FuncTest.Commands
                     var testCert = TestCertificate.Generate(actionGenerator);
                     if (RuntimeEnvironmentHelper.IsWindows)
                     {
-                        _trustedTestCertWithInvalidEku = testCert.WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.LocalMachine);
+                        _trustedTestCertWithInvalidEku = testCert.WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.LocalMachine, _certDir);
                     }
                     else if (RuntimeEnvironmentHelper.IsLinux)
                     {
-                        _trustedTestCertWithInvalidEku = testCert.WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.CurrentUser);
+                        _trustedTestCertWithInvalidEku = testCert.WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.CurrentUser, _certDir, trustInLinux: true);
                     }
                     else
                     {
-                        _trustedTestCertWithInvalidEku = testCert.WithPrivateKeyAndTrust(StoreName.My, StoreLocation.CurrentUser);
+                        _trustedTestCertWithInvalidEku = testCert.WithPrivateKeyAndTrust(StoreName.My, StoreLocation.CurrentUser, _certDir, trustInMac: true);
                     }
                 }
 
@@ -118,15 +121,15 @@ namespace NuGet.CommandLine.FuncTest.Commands
                     var testCert = TestCertificate.Generate(actionGenerator);
                     if (RuntimeEnvironmentHelper.IsWindows)
                     {
-                        _trustedTestCertExpired = testCert.WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.LocalMachine);
+                        _trustedTestCertExpired = testCert.WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.LocalMachine, _certDir);
                     }
                     else if (RuntimeEnvironmentHelper.IsLinux)
                     {
-                        _trustedTestCertExpired = testCert.WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.CurrentUser);
+                        _trustedTestCertExpired = testCert.WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.CurrentUser, _certDir, trustInLinux: true);
                     }
                     else
                     {
-                        _trustedTestCertExpired = testCert.WithPrivateKeyAndTrust(StoreName.My, StoreLocation.CurrentUser);
+                        _trustedTestCertExpired = testCert.WithPrivateKeyAndTrust(StoreName.My, StoreLocation.CurrentUser, _certDir, trustInMac: true);
                     }
                 }
 
@@ -148,15 +151,15 @@ namespace NuGet.CommandLine.FuncTest.Commands
                     var testCert = TestCertificate.Generate(actionGenerator);
                     if (RuntimeEnvironmentHelper.IsWindows)
                     {
-                        _trustedTestCertNotYetValid = testCert.WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.LocalMachine);
+                        _trustedTestCertNotYetValid = testCert.WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.LocalMachine, _certDir);
                     }
                     else if (RuntimeEnvironmentHelper.IsLinux)
                     {
-                        _trustedTestCertNotYetValid = testCert.WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.CurrentUser);
+                        _trustedTestCertNotYetValid = testCert.WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.CurrentUser, _certDir, trustInLinux: true);
                     }
                     else
                     {
-                        _trustedTestCertNotYetValid = testCert.WithPrivateKeyAndTrust(StoreName.My, StoreLocation.CurrentUser);
+                        _trustedTestCertNotYetValid = testCert.WithPrivateKeyAndTrust(StoreName.My, StoreLocation.CurrentUser, _certDir, trustInMac: true);
                     }
                 }
 
@@ -170,7 +173,7 @@ namespace NuGet.CommandLine.FuncTest.Commands
             {
                 if (_trustedTestCertChain == null)
                 {
-                    var certChain = SigningTestUtility.GenerateCertificateChain(_validCertChainLength, CrlServer.Uri, TestDirectory.Path);
+                    var certChain = SigningTestUtility.GenerateCertificateChain(_validCertChainLength, CrlServer.Uri, TestDirectory.Path, _certDir);
 
                     _trustedTestCertChain = new TrustedTestCertificateChain()
                     {
@@ -190,7 +193,7 @@ namespace NuGet.CommandLine.FuncTest.Commands
             {
                 if (_revokedTestCertChain == null)
                 {
-                    var certChain = SigningTestUtility.GenerateCertificateChain(_invalidCertChainLength, CrlServer.Uri, TestDirectory.Path);
+                    var certChain = SigningTestUtility.GenerateCertificateChain(_invalidCertChainLength, CrlServer.Uri, TestDirectory.Path, _certDir);
 
                     _revokedTestCertChain = new TrustedTestCertificateChain()
                     {
@@ -213,7 +216,7 @@ namespace NuGet.CommandLine.FuncTest.Commands
             {
                 if (_revocationUnknownTestCertChain == null)
                 {
-                    var certChain = SigningTestUtility.GenerateCertificateChain(_invalidCertChainLength, CrlServer.Uri, TestDirectory.Path, configureLeafCrl: false);
+                    var certChain = SigningTestUtility.GenerateCertificateChain(_invalidCertChainLength, CrlServer.Uri, TestDirectory.Path, _certDir, configureLeafCrl: false);
 
                     _revocationUnknownTestCertChain = new TrustedTestCertificateChain()
                     {
@@ -238,7 +241,8 @@ namespace NuGet.CommandLine.FuncTest.Commands
                     _untrustedSelfIssuedCertificateInCertificateStore = TrustedTestCert.Create(
                         certificate,
                         StoreName.My,
-                        StoreLocation.CurrentUser);
+                        StoreLocation.CurrentUser,
+                        _certDir);
                 }
 
                 return new X509Certificate2(_untrustedSelfIssuedCertificateInCertificateStore.Source);
@@ -400,6 +404,7 @@ namespace NuGet.CommandLine.FuncTest.Commands
             _crlServer?.Dispose();
             _testDirectory?.Dispose();
             _responders.Dispose();
+            _certDir.Dispose();
 
             if (_testServer.IsValueCreated)
             {
@@ -419,21 +424,26 @@ namespace NuGet.CommandLine.FuncTest.Commands
                 _trustedTimestampRoot = TrustedTestCert.Create(
                     rootCertificate,
                     StoreName.Root,
-                    StoreLocation.LocalMachine);
+                    StoreLocation.LocalMachine,
+                    _certDir);
             }
             else if (RuntimeEnvironmentHelper.IsLinux)
             {
                 _trustedTimestampRoot = TrustedTestCert.Create(
                            rootCertificate,
                            StoreName.Root,
-                           StoreLocation.CurrentUser);
+                           StoreLocation.CurrentUser,
+                           _certDir,
+                           trustInLinux: true);
             }
             else
             {
                 _trustedTimestampRoot = TrustedTestCert.Create(
                     rootCertificate,
                     StoreName.My,
-                    StoreLocation.CurrentUser);
+                    StoreLocation.CurrentUser,
+                    _certDir,
+                    trustInMac: true);
             }
 
             var ca = intermediateCa;

@@ -1762,6 +1762,7 @@ namespace NuGet.Packaging.Test
             // this test will create an unsigned package, copy it, then sign it. then compare the contentHash
             var nupkg = new SimpleTestPackageContext("Package.Content.Hash.Test", "1.0.0");
 
+            using (var certDir = TestDirectory.Create())
             using (var unsignedDir = TestDirectory.Create())
             {
                 var nupkgFileName = $"{nupkg.Identity.Id}.{nupkg.Identity.Version}.nupkg";
@@ -1775,7 +1776,7 @@ namespace NuGet.Packaging.Test
 
                     var signedPackagePath = Path.Combine(signedDir.Path, nupkgFileName);
 
-                    using (var trustedCert = SigningTestUtility.GenerateTrustedTestCertificate())
+                    using (var trustedCert = SigningTestUtility.GenerateTrustedTestCertificate(certDir))
                     using (var originalPackage = File.OpenRead(nupkgFileInfo.FullName))
                     using (var signedPackage = File.Open(signedPackagePath, FileMode.OpenOrCreate, FileAccess.ReadWrite))
                     using (var request = new AuthorSignPackageRequest(

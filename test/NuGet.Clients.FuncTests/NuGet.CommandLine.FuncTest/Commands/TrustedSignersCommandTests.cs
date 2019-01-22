@@ -259,7 +259,7 @@ namespace NuGet.CommandLine.FuncTest.Commands
             var package = new SimpleTestPackageContext();
             using (var dir = TestDirectory.Create())
             using (var zipStream = await package.CreateAsStreamAsync())
-            using (var trustedTestCert = SigningTestUtility.GenerateTrustedTestCertificate())
+            using (var trustedTestCert = SigningTestUtility.GenerateTrustedTestCertificate(dir))
             {
                 var certFingerprint = SignatureTestUtility.GetFingerprint(trustedTestCert.Source.Cert, HashAlgorithmName.SHA256);
                 var signedPackagePath = await SignedArchiveTestUtility.AuthorSignPackageAsync(trustedTestCert.Source.Cert, package, dir);
@@ -309,7 +309,7 @@ namespace NuGet.CommandLine.FuncTest.Commands
             var package = new SimpleTestPackageContext();
             using (var dir = TestDirectory.Create())
             using (var zipStream = await package.CreateAsStreamAsync())
-            using (var trustedTestCert = SigningTestUtility.GenerateTrustedTestCertificate())
+            using (var trustedTestCert = SigningTestUtility.GenerateTrustedTestCertificate(dir))
             {
                 var certFingerprint = SignatureTestUtility.GetFingerprint(trustedTestCert.Source.Cert, HashAlgorithmName.SHA256);
                 var repoServiceIndex = "https://serviceindex.test/v3/index.json";
@@ -369,8 +369,8 @@ namespace NuGet.CommandLine.FuncTest.Commands
             var package = new SimpleTestPackageContext();
             using (var dir = TestDirectory.Create())
             using (var zipStream = await package.CreateAsStreamAsync())
-            using (var authorTrustedTestCert = SigningTestUtility.GenerateTrustedTestCertificate())
-            using (var repoTrustedTestCert = SigningTestUtility.GenerateTrustedTestCertificate())
+            using (var authorTrustedTestCert = SigningTestUtility.GenerateTrustedTestCertificate(dir))
+            using (var repoTrustedTestCert = SigningTestUtility.GenerateTrustedTestCertificate(dir))
             {
                 var certFingerprint = SignatureTestUtility.GetFingerprint(repoTrustedTestCert.Source.Cert, HashAlgorithmName.SHA256);
                 var repoServiceIndex = "https://serviceindex.test/v3/index.json";

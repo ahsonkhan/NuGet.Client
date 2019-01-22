@@ -893,7 +893,7 @@ namespace NuGet.Packaging.FuncTest
 
             using (var dir = TestDirectory.Create())
             using (var testCertificate = new X509Certificate2(_trustedTestCert.Source.Cert))
-            using (var trusted = SigningTestUtility.GenerateTrustedTestCertificate())
+            using (var trusted = SigningTestUtility.GenerateTrustedTestCertificate(dir))
             using (var counterCertificate = new X509Certificate2(trusted.Source.Cert))
             {
                 var signedPackagePath = await SignedArchiveTestUtility.AuthorSignPackageAsync(
@@ -930,7 +930,7 @@ namespace NuGet.Packaging.FuncTest
 
             using (var dir = TestDirectory.Create())
             using (var testCertificate = new X509Certificate2(_trustedTestCert.Source.Cert))
-            using (var trusted = SigningTestUtility.GenerateTrustedTestCertificate())
+            using (var trusted = SigningTestUtility.GenerateTrustedTestCertificate(dir))
             using (var counterCertificate = new X509Certificate2(trusted.Source.Cert))
             {
                 var signedPackagePath = await SignedArchiveTestUtility.AuthorSignPackageAsync(
@@ -3137,8 +3137,9 @@ namespace NuGet.Packaging.FuncTest
         private static IDisposable TrustPrimaryRootCertificate(PrimarySignature signature)
         {
             using (var certificateChain = SignatureUtility.GetCertificateChain(signature))
+            using (var certDir = TestDirectory.Create())
             {
-                return TrustRootCertificate(certificateChain);
+                return TrustRootCertificate(certificateChain, certDir);
             }
         }
 
@@ -3152,12 +3153,13 @@ namespace NuGet.Packaging.FuncTest
             }
 
             using (var certificateChain = SignatureUtility.GetTimestampCertificateChain(signature))
+            using (var certDir = TestDirectory.Create())
             {
-                return TrustRootCertificate(certificateChain);
+                return TrustRootCertificate(certificateChain, certDir);
             }
         }
 
-        private static IDisposable TrustRootCertificate(IX509CertificateChain certificateChain)
+        private static IDisposable TrustRootCertificate(IX509CertificateChain certificateChain, TestDirectory certDir)
         {
             var rootCertificate = certificateChain.Last();
 
@@ -3167,6 +3169,7 @@ namespace NuGet.Packaging.FuncTest
                     new X509Certificate2(rootCertificate),
                     StoreName.Root,
                     StoreLocation.LocalMachine,
+                    certDir,
                     maximumValidityPeriod: TimeSpan.MaxValue);
             }
             else if (RuntimeEnvironmentHelper.IsLinux)
@@ -3175,7 +3178,9 @@ namespace NuGet.Packaging.FuncTest
                     new X509Certificate2(rootCertificate),
                     StoreName.Root,
                     StoreLocation.CurrentUser,
-                    maximumValidityPeriod: TimeSpan.MaxValue);
+                    certDir,
+                    maximumValidityPeriod: TimeSpan.MaxValue,
+                    trustInLinux: true);
             }
             else
             {
@@ -3183,7 +3188,9 @@ namespace NuGet.Packaging.FuncTest
                     new X509Certificate2(rootCertificate),
                     StoreName.My,
                     StoreLocation.CurrentUser,
-                    maximumValidityPeriod: TimeSpan.MaxValue);
+                    certDir,
+                    maximumValidityPeriod: TimeSpan.MaxValue,
+                    trustInMac: true);
             }
         }
     }
