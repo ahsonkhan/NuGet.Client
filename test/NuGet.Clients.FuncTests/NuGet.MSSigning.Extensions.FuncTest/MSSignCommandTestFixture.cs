@@ -50,6 +50,10 @@ namespace NuGet.MSSigning.Extensions.FuncTest.Commands
                     {
                         _trustedTestCertWithPrivateKey = testCert.WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.LocalMachine);
                     }
+                    else if (RuntimeEnvironmentHelper.IsLinux)
+                    {
+                        _trustedTestCertWithPrivateKey = testCert.WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.CurrentUser);
+                    }
                     else
                     {
                         _trustedTestCertWithPrivateKey = testCert.WithPrivateKeyAndTrust(StoreName.My, StoreLocation.CurrentUser);
@@ -75,6 +79,10 @@ namespace NuGet.MSSigning.Extensions.FuncTest.Commands
                     if (RuntimeEnvironmentHelper.IsWindows)
                     {
                         _trustedTestCertWithoutPrivateKey = testCert.WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.LocalMachine);
+                    }
+                    else if (RuntimeEnvironmentHelper.IsLinux)
+                    {
+                        _trustedTestCertWithoutPrivateKey = testCert.WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.CurrentUser);
                     }
                     else
                     {
@@ -122,6 +130,13 @@ namespace NuGet.MSSigning.Extensions.FuncTest.Commands
                     rootCertificate,
                     StoreName.Root,
                     StoreLocation.LocalMachine);
+            }
+            else if (RuntimeEnvironmentHelper.IsLinux)
+            {
+                _trustedTimestampRoot = TrustedTestCert.Create(
+                    rootCertificate,
+                    StoreName.Root,
+                    StoreLocation.CurrentUser);
             }
             else
             {

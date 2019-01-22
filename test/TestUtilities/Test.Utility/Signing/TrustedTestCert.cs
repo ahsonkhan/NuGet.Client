@@ -42,8 +42,8 @@ namespace Test.Utility.Signing
 
         public TrustedTestCert(T source,
             Func<T, X509Certificate2> getCert,
-            StoreName storeName = StoreName.My,
-            StoreLocation storeLocation = StoreLocation.CurrentUser,
+            StoreName storeName,
+            StoreLocation storeLocation,
             TimeSpan? maximumValidityPeriod = null)
         {
             Source = source;

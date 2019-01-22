@@ -98,6 +98,13 @@ namespace NuGet.Packaging.FuncTest
                     StoreName.Root,
                     StoreLocation.LocalMachine);
             }
+            else if (RuntimeEnvironmentHelper.IsLinux)
+            {
+                var trustedServerRoot = TrustedTestCert.Create(
+                    rootCertificate,
+                    StoreName.Root,
+                    StoreLocation.CurrentUser);
+            }
             else
             {
                 var trustedServerRoot = TrustedTestCert.Create(

@@ -29,9 +29,7 @@ namespace NuGet.CommandLine.FuncTest.Commands
         private TrustedTestCert<TestCertificate> _trustedTestCertExpired;
         private TrustedTestCert<TestCertificate> _trustedTestCertNotYetValid;
         private TrustedTestCert<X509Certificate2> _trustedTimestampRoot;
-#if IS_DESKTOP
         private TrustedTestCert<X509Certificate2> _untrustedSelfIssuedCertificateInCertificateStore;
-#endif
         private TrustedTestCertificateChain _trustedTestCertChain;
         private TrustedTestCertificateChain _revokedTestCertChain;
         private TrustedTestCertificateChain _revocationUnknownTestCertChain;
@@ -63,6 +61,10 @@ namespace NuGet.CommandLine.FuncTest.Commands
                     {
                         _trustedTestCert = testCert.WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.LocalMachine);
                     }
+                    else if (RuntimeEnvironmentHelper.IsLinux)
+                    {
+                        _trustedTestCert = testCert.WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.CurrentUser);
+                    }
                     else
                     {
                         _trustedTestCert = testCert.WithPrivateKeyAndTrust(StoreName.My, StoreLocation.CurrentUser);
@@ -87,6 +89,10 @@ namespace NuGet.CommandLine.FuncTest.Commands
                     if (RuntimeEnvironmentHelper.IsWindows)
                     {
                         _trustedTestCertWithInvalidEku = testCert.WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.LocalMachine);
+                    }
+                    else if (RuntimeEnvironmentHelper.IsLinux)
+                    {
+                        _trustedTestCertWithInvalidEku = testCert.WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.CurrentUser);
                     }
                     else
                     {
@@ -114,6 +120,10 @@ namespace NuGet.CommandLine.FuncTest.Commands
                     {
                         _trustedTestCertExpired = testCert.WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.LocalMachine);
                     }
+                    else if (RuntimeEnvironmentHelper.IsLinux)
+                    {
+                        _trustedTestCertExpired = testCert.WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.CurrentUser);
+                    }
                     else
                     {
                         _trustedTestCertExpired = testCert.WithPrivateKeyAndTrust(StoreName.My, StoreLocation.CurrentUser);
@@ -139,6 +149,10 @@ namespace NuGet.CommandLine.FuncTest.Commands
                     if (RuntimeEnvironmentHelper.IsWindows)
                     {
                         _trustedTestCertNotYetValid = testCert.WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.LocalMachine);
+                    }
+                    else if (RuntimeEnvironmentHelper.IsLinux)
+                    {
+                        _trustedTestCertNotYetValid = testCert.WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.CurrentUser);
                     }
                     else
                     {
@@ -212,8 +226,7 @@ namespace NuGet.CommandLine.FuncTest.Commands
                 return _revocationUnknownTestCertChain.Leaf;
             }
         }
-// Linux and MacOS don't consider my/currentUser as untrusted
-#if IS_DESKTOP
+
         public X509Certificate2 UntrustedSelfIssuedCertificateInCertificateStore
         {
             get
@@ -231,7 +244,7 @@ namespace NuGet.CommandLine.FuncTest.Commands
                 return new X509Certificate2(_untrustedSelfIssuedCertificateInCertificateStore.Source);
             }
         }
-#endif
+
         public IList<ISignatureVerificationProvider> TrustProviders
         {
             get
@@ -379,9 +392,7 @@ namespace NuGet.CommandLine.FuncTest.Commands
             _trustedTestCertExpired?.Dispose();
             _trustedTestCertNotYetValid?.Dispose();
             _trustedTimestampRoot?.Dispose();
-#if IS_DESKTOP
             _untrustedSelfIssuedCertificateInCertificateStore?.Dispose();
-#endif
             _trustedTestCertChain?.Dispose();
             _revokedTestCertChain?.Dispose();
             _revocationUnknownTestCertChain?.Dispose();
@@ -409,6 +420,13 @@ namespace NuGet.CommandLine.FuncTest.Commands
                     rootCertificate,
                     StoreName.Root,
                     StoreLocation.LocalMachine);
+            }
+            else if (RuntimeEnvironmentHelper.IsLinux)
+            {
+                _trustedTimestampRoot = TrustedTestCert.Create(
+                           rootCertificate,
+                           StoreName.Root,
+                           StoreLocation.CurrentUser);
             }
             else
             {

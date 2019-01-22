@@ -121,6 +121,11 @@ namespace NuGet.Packaging.FuncTest
                             testCertificate1 = temp1.WithTrust(StoreName.Root, StoreLocation.LocalMachine);
                             testCertificate2 = temp2.WithTrust(StoreName.Root, StoreLocation.LocalMachine);
                         }
+                        else if (RuntimeEnvironmentHelper.IsLinux)
+                        {
+                            testCertificate1 = temp1.WithTrust(StoreName.Root, StoreLocation.CurrentUser);
+                            testCertificate2 = temp2.WithTrust(StoreName.Root, StoreLocation.CurrentUser);
+                        }
                         else
                         {
                             testCertificate1 = temp1.WithTrust(StoreName.My, StoreLocation.CurrentUser);
@@ -210,6 +215,13 @@ namespace NuGet.Packaging.FuncTest
                     rootCertificate,
                     StoreName.Root,
                     StoreLocation.LocalMachine);
+            }
+            else if (RuntimeEnvironmentHelper.IsLinux)
+            {
+                _trustedServerRoot = TrustedTestCert.Create(
+                    rootCertificate,
+                    StoreName.Root,
+                    StoreLocation.CurrentUser);
             }
             else
             {

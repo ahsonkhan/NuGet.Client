@@ -3169,6 +3169,14 @@ namespace NuGet.Packaging.FuncTest
                     StoreLocation.LocalMachine,
                     maximumValidityPeriod: TimeSpan.MaxValue);
             }
+            else if (RuntimeEnvironmentHelper.IsLinux)
+            {
+                return TrustedTestCert.Create(
+                    new X509Certificate2(rootCertificate),
+                    StoreName.Root,
+                    StoreLocation.CurrentUser,
+                    maximumValidityPeriod: TimeSpan.MaxValue);
+            }
             else
             {
                 return TrustedTestCert.Create(

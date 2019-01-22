@@ -143,6 +143,10 @@ namespace Test.Utility.Signing
                     {
                         cert = temp.WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.LocalMachine);
                     }
+                    else if (RuntimeEnvironmentHelper.IsLinux)
+                    {
+                        cert = temp.WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.CurrentUser);
+                    }
                     else
                     {
                         cert = temp.WithPrivateKeyAndTrust(StoreName.My, StoreLocation.CurrentUser);
@@ -163,6 +167,10 @@ namespace Test.Utility.Signing
                     if (RuntimeEnvironmentHelper.IsWindows)
                     {
                         cert = temp.WithPrivateKeyAndTrust(StoreName.CertificateAuthority, StoreLocation.LocalMachine);
+                    }
+                    else if (RuntimeEnvironmentHelper.IsLinux)
+                    {
+                        cert = temp.WithPrivateKeyAndTrust(StoreName.CertificateAuthority, StoreLocation.CurrentUser);
                     }
                     else
                     {
@@ -501,7 +509,7 @@ namespace Test.Utility.Signing
 
             return cms;
         }
-#if IS_DESKTOP
+
         /// <summary>
         /// Generates a SignedCMS object for some content.
         /// </summary>
@@ -527,7 +535,7 @@ namespace Test.Utility.Signing
                 return cms;
             }
         }
-#endif
+
         /// <summary>
         /// Returns the public cert without the private key.
         /// </summary>
@@ -557,6 +565,10 @@ namespace Test.Utility.Signing
             {
                 return testCert.WithTrust(StoreName.Root, StoreLocation.LocalMachine);
             }
+            else if (RuntimeEnvironmentHelper.IsLinux)
+            {
+                return testCert.WithTrust(StoreName.Root, StoreLocation.CurrentUser);
+            }
             else
             {
                 return testCert.WithTrust(StoreName.My, StoreLocation.CurrentUser);
@@ -574,6 +586,10 @@ namespace Test.Utility.Signing
             if (RuntimeEnvironmentHelper.IsWindows)
             {
                 return testCert.WithTrust(StoreName.Root, StoreLocation.LocalMachine);
+            }
+            else if (RuntimeEnvironmentHelper.IsLinux)
+            {
+                return testCert.WithTrust(StoreName.Root, StoreLocation.CurrentUser);
             }
             else
             {
@@ -593,6 +609,10 @@ namespace Test.Utility.Signing
             {
                 return testCert.WithTrust(StoreName.Root, StoreLocation.LocalMachine);
             }
+            else if (RuntimeEnvironmentHelper.IsLinux)
+            {
+                return testCert.WithTrust(StoreName.Root, StoreLocation.CurrentUser);
+            }
             else
             {
                 return testCert.WithTrust(StoreName.My, StoreLocation.CurrentUser);
@@ -610,6 +630,10 @@ namespace Test.Utility.Signing
             if (RuntimeEnvironmentHelper.IsWindows)
             {
                 return testCert.WithTrust(StoreName.Root, StoreLocation.LocalMachine);
+            }
+            else if (RuntimeEnvironmentHelper.IsLinux)
+            {
+                return testCert.WithTrust(StoreName.Root, StoreLocation.CurrentUser);
             }
             else
             {
