@@ -790,7 +790,7 @@ namespace NuGet.Commands
                 object keyObj;
                 if (group.Properties.TryGetValue(primaryKey, out keyObj))
                 {
-                    string key = (string)keyObj;
+                    var key = (string)keyObj;
 
                     List<ContentItemGroup> index;
                     if (!primaryGroups.TryGetValue(key, out index))
