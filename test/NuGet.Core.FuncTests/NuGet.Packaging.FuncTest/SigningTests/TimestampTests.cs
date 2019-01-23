@@ -92,43 +92,44 @@ namespace NuGet.Packaging.FuncTest
 
             var rootCertificate = new X509Certificate2(rootCa.Certificate.GetEncoded());
 
+            var storeName = StoreName.Root;
+            var storeLocation = StoreLocation.CurrentUser;
+            var trustInLinux = false;
+            var trustInMac = false;
+
             if (RuntimeEnvironmentHelper.IsWindows)
             {
-                var trustedServerRoot = TrustedTestCert.Create(
-                    rootCertificate,
-                    StoreName.Root,
-                    StoreLocation.LocalMachine,
-                    dir);
+                storeLocation = StoreLocation.LocalMachine;
             }
             else if (RuntimeEnvironmentHelper.IsLinux)
             {
-                var trustedServerRoot = TrustedTestCert.Create(
-                    rootCertificate,
-                    StoreName.Root,
-                    StoreLocation.CurrentUser,
-                    dir,
-                    trustInLinux: true);
+                trustInLinux = true;
             }
             else
             {
-                var trustedServerRoot = TrustedTestCert.Create(
-                    rootCertificate,
-                    StoreName.My,
-                    StoreLocation.CurrentUser,
-                    dir,
-                    trustInMac: true);
+                storeName = StoreName.My;
+                trustInMac = true;
             }
 
-            var ca = intermediateCa;
-
-            while (ca != null)
+            using (var trustedServerRoot = TrustedTestCert.Create(
+                rootCertificate,
+                storeName,
+                storeLocation,
+                dir,
+                trustInLinux: trustInLinux,
+                trustInMac: trustInMac))
             {
-                responders.Add(testServer.RegisterResponder(ca));
+                var ca = intermediateCa;
 
-                ca = ca.Parent;
+                while (ca != null)
+                {
+                    responders.Add(testServer.RegisterResponder(ca));
+
+                    ca = ca.Parent;
+                }
+
+                return intermediateCa;
             }
-
-            return intermediateCa;
         }
     }
 }

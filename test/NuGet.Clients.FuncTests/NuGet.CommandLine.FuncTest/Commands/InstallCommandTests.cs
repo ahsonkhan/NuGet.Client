@@ -41,7 +41,7 @@ namespace NuGet.CommandLine.FuncTest.Commands
         {
             _testFixture = fixture ?? throw new ArgumentNullException(nameof(fixture));
             _certDir = fixture.CertificatesDirectory;
-            _trustedTestCert = SigningTestUtility.GenerateTrustedTestCertificate(_certDir);
+            _trustedTestCert = _testFixture.TrustedTestCertificate;
             _nugetExePath = _testFixture.NuGetExePath;
         }
 

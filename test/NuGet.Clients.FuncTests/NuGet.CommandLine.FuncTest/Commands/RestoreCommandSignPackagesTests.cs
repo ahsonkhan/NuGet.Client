@@ -3,7 +3,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -38,13 +37,11 @@ namespace NuGet.CommandLine.FuncTest.Commands
         private SignCommandTestFixture _testFixture;
         private TrustedTestCert<TestCertificate> _trustedTestCert;
         private readonly string _nugetExePath;
-        private readonly TestDirectory _certDir;
 
         public RestoreCommandSignPackagesTests(SignCommandTestFixture fixture)
         {
             _testFixture = fixture ?? throw new ArgumentNullException(nameof(fixture));
-            _certDir = fixture.CertificatesDirectory;
-            _trustedTestCert = SigningTestUtility.GenerateTrustedTestCertificate(_certDir);
+            _trustedTestCert = fixture.TrustedTestCertificate;
             _nugetExePath = _testFixture.NuGetExePath;
         }
 

@@ -28,14 +28,12 @@ namespace NuGet.Packaging.FuncTest
         private SigningTestFixture _testFixture;
         private TrustedTestCert<TestCertificate> _trustedAuthorTestCert;
         private TrustedTestCert<TestCertificate> _trustedRepoTestCert;
-        private TestDirectory _certDir;
 
         public AllowListVerificationProviderTests(SigningTestFixture fixture)
         {
             _testFixture = fixture ?? throw new ArgumentNullException(nameof(fixture));
-            _certDir = fixture.CertificatesDirectory;
             _trustedAuthorTestCert = _testFixture.TrustedTestCertificate;
-            _trustedRepoTestCert = SigningTestUtility.GenerateTrustedTestCertificate(_certDir);
+            _trustedRepoTestCert = _testFixture.TrustedRepositoryCertificate;
         }
 
         [CIOnlyFact]
@@ -561,7 +559,6 @@ namespace NuGet.Packaging.FuncTest
             // Arrange
             using (var dir = TestDirectory.Create())
             using (var repoCertificate = new X509Certificate2(_trustedRepoTestCert.Source.Cert))
-            using (var packageSignatureCertificate = SigningTestUtility.GenerateTrustedTestCertificate(_certDir).Source.Cert)
             {
                 var hashAlgorithmName = HashAlgorithmName.SHA256;
                 var fingerprint = "abcdefg";

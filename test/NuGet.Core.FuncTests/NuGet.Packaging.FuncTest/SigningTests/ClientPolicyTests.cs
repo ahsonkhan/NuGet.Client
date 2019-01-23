@@ -31,7 +31,7 @@ namespace NuGet.Packaging.FuncTest
             _testFixture = fixture ?? throw new ArgumentNullException(nameof(fixture));
             _certDir = fixture.CertificatesDirectory;
             _trustedAuthorTestCert = _testFixture.TrustedTestCertificate;
-            _trustedRepoTestCert = SigningTestUtility.GenerateTrustedTestCertificate(_certDir);
+            _trustedRepoTestCert = _testFixture.TrustedRepositoryCertificate;
         }
 
         [CIOnlyTheory]

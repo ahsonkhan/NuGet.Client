@@ -25,6 +25,7 @@ namespace NuGet.CommandLine.FuncTest.Commands
         private const int _invalidCertChainLength = 2;
 
         private TrustedTestCert<TestCertificate> _trustedTestCert;
+        private TrustedTestCert<TestCertificate> _trustedRepoTestCert;
         private TrustedTestCert<TestCertificate> _trustedTestCertWithInvalidEku;
         private TrustedTestCert<TestCertificate> _trustedTestCertExpired;
         private TrustedTestCert<TestCertificate> _trustedTestCertNotYetValid;
@@ -75,6 +76,36 @@ namespace NuGet.CommandLine.FuncTest.Commands
                 }
 
                 return _trustedTestCert;
+            }
+        }
+
+        public TrustedTestCert<TestCertificate> TrustedRepoTestCertificate
+        {
+            get
+            {
+                if (_trustedRepoTestCert == null)
+                {
+                    var actionGenerator = SigningTestUtility.CertificateModificationGeneratorForCodeSigningEkuCert;
+
+                    // Code Sign EKU needs trust to a root authority
+                    // Add the cert to Root CA list in LocalMachine as it does not prompt a dialog
+                    // This makes all the associated tests to require admin privilege
+                    var testCert = TestCertificate.Generate(actionGenerator);
+                    if (RuntimeEnvironmentHelper.IsWindows)
+                    {
+                        _trustedRepoTestCert = testCert.WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.LocalMachine, _certDir);
+                    }
+                    else if (RuntimeEnvironmentHelper.IsLinux)
+                    {
+                        _trustedRepoTestCert = testCert.WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.CurrentUser, _certDir, trustInLinux: true);
+                    }
+                    else
+                    {
+                        _trustedRepoTestCert = testCert.WithPrivateKeyAndTrust(StoreName.My, StoreLocation.CurrentUser, _certDir, trustInMac: true);
+                    }
+                }
+
+                return _trustedRepoTestCert;
             }
         }
 
@@ -392,6 +423,7 @@ namespace NuGet.CommandLine.FuncTest.Commands
         public void Dispose()
         {
             _trustedTestCert?.Dispose();
+            _trustedRepoTestCert?.Dispose();
             _trustedTestCertWithInvalidEku?.Dispose();
             _trustedTestCertExpired?.Dispose();
             _trustedTestCertNotYetValid?.Dispose();

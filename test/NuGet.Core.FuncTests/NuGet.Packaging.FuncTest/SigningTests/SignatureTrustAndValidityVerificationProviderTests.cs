@@ -31,6 +31,7 @@ namespace NuGet.Packaging.FuncTest
         private readonly SignedPackageVerifierSettings _defaultSettings = SignedPackageVerifierSettings.GetDefault();
         private readonly SigningTestFixture _testFixture;
         private readonly TrustedTestCert<TestCertificate> _trustedTestCert;
+        private readonly TrustedTestCert<TestCertificate> _trustedRepoTestCert;
         private readonly TestCertificate _untrustedTestCertificate;
         private readonly IList<ISignatureVerificationProvider> _trustProviders;
 
@@ -38,6 +39,7 @@ namespace NuGet.Packaging.FuncTest
         {
             _testFixture = fixture ?? throw new ArgumentNullException(nameof(fixture));
             _trustedTestCert = _testFixture.TrustedTestCertificate;
+            _trustedRepoTestCert = _testFixture.TrustedRepositoryCertificate;
             _untrustedTestCertificate = _testFixture.UntrustedTestCertificate;
             _trustProviders = new List<ISignatureVerificationProvider>()
             {
@@ -893,8 +895,7 @@ namespace NuGet.Packaging.FuncTest
 
             using (var dir = TestDirectory.Create())
             using (var testCertificate = new X509Certificate2(_trustedTestCert.Source.Cert))
-            using (var trusted = SigningTestUtility.GenerateTrustedTestCertificate(dir))
-            using (var counterCertificate = new X509Certificate2(trusted.Source.Cert))
+            using (var counterCertificate = new X509Certificate2(_trustedRepoTestCert.Source.Cert))
             {
                 var signedPackagePath = await SignedArchiveTestUtility.AuthorSignPackageAsync(
                     testCertificate,
@@ -930,8 +931,7 @@ namespace NuGet.Packaging.FuncTest
 
             using (var dir = TestDirectory.Create())
             using (var testCertificate = new X509Certificate2(_trustedTestCert.Source.Cert))
-            using (var trusted = SigningTestUtility.GenerateTrustedTestCertificate(dir))
-            using (var counterCertificate = new X509Certificate2(trusted.Source.Cert))
+            using (var counterCertificate = new X509Certificate2(_trustedRepoTestCert.Source.Cert))
             {
                 var signedPackagePath = await SignedArchiveTestUtility.AuthorSignPackageAsync(
                     testCertificate,
