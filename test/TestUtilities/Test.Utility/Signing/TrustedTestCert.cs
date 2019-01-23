@@ -114,7 +114,7 @@ namespace Test.Utility.Signing
 
         private void TrustCertInLinux(TestDirectory dir)
         {
-            var certDir = @"/usr/share/ca-certificates/nuget";
+            var certDir = @"/usr/local/share/ca-certificates";
 
             var tempCertFileName = "NuGetTest-" + Guid.NewGuid().ToString() + ".crt";
             var tempCertPath = Path.Combine(dir, tempCertFileName);
@@ -127,8 +127,10 @@ namespace Test.Utility.Signing
 
             _systemTrustedCertPath = Path.Combine(certDir, tempCertFileName);
 
-            Process.Start(@"/usr/bin/sudo", $@"cp {tempCertPath} {_systemTrustedCertPath}");
-            Process.Start(@"/usr/bin/sudo", @"update-ca-certificates");
+            var copyProcess = Process.Start(@"/usr/bin/sudo", $@"cp {tempCertPath} {_systemTrustedCertPath}");
+            copyProcess.WaitForExit();
+            var updateProcess = Process.Start(@"/usr/bin/sudo", @"update-ca-certificates");
+            updateProcess.WaitForExit();
         }
 
         private void TrustCertInMac(TestDirectory dir)
@@ -140,7 +142,8 @@ namespace Test.Utility.Signing
             _systemTrustedCertPath = Path.Combine(dir, tempCertFileName);
             File.WriteAllBytes(_systemTrustedCertPath, exportedCert);
 
-            Process.Start(@"/usr/bin/sudo", $@"security -v add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain {_systemTrustedCertPath}");
+            var trustProcess = Process.Start(@"/usr/bin/sudo", $@"security -v add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain {_systemTrustedCertPath}");
+            trustProcess.WaitForExit();
         }
 
         private void DisposeCrl()
@@ -164,12 +167,17 @@ namespace Test.Utility.Signing
 
                 if (_systemTrustedCertPath != null && RuntimeEnvironmentHelper.IsLinux)
                 {
-                    Process.Start(@"/usr/bin/sudo", $@"rm {_systemTrustedCertPath}");
+                    var rmProcess = Process.Start(@"/usr/bin/sudo", $@"rm {_systemTrustedCertPath}");
+                    rmProcess.WaitForExit();
+                    var updateProcess = Process.Start(@"/usr/bin/sudo", @"update-ca-certificates");
+                    updateProcess.WaitForExit();
+
                 }
 
                 if (_trustedInMac && RuntimeEnvironmentHelper.IsMacOSX)
                 {
-                    Process.Start(@"/usr/bin/sudo", $@"security -v remove-trusted-cert -d {_systemTrustedCertPath}");
+                    var untrustProcess = Process.Start(@"/usr/bin/sudo", $@"security -v remove-trusted-cert -d {_systemTrustedCertPath}");
+                    untrustProcess.WaitForExit();
                 }
 
                 DisposeCrl();
