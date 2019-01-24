@@ -1,4 +1,4 @@
-﻿function Test-PackageManagerServicesAreAvailableThroughMEF {
+function Test-PackageManagerServicesAreAvailableThroughMEF {
     # Arrange
     $cm = Get-VsComponentModel
 
@@ -939,4 +939,22 @@ function Test-CreateVsPathContextUsesAssetsFileIfAvailable {
 	# Assert
 	Assert-NotNull $context.UserPackageFolder
 	Assert-NotEqual $userPackageFolder $context.UserPackageFolder
+}
+
+function Test-BuildIntegratedProjectInstallPackage {
+
+    # Arrange
+    $project = New-Project BuildIntegratedClassLibrary Project1
+    $id = 'CustomBuildIntegratedProjectInstallPackage'
+    $version = '1.0.0'
+
+    $solutionFile = Get-SolutionFullName
+	$solutionDir = Split-Path $solutionFile -Parent
+    $source = Join-Path $solutionDir "CustomSource"
+
+    # Act
+    [API.Test.InternalAPITestHook]::InstallPackageApiFromSource($source, $id, $version)
+
+    # Assert
+    Assert-ProjectJsonLockFilePackage $project $id $version
 }
