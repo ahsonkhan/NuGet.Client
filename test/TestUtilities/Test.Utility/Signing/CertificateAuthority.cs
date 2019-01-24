@@ -5,31 +5,34 @@ using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
+using NuGet.Packaging.Signing;
 using Org.BouncyCastle.Asn1;
-using Org.BouncyCastle.Asn1.Ocsp;
 using Org.BouncyCastle.Asn1.X509;
-using Org.BouncyCastle.Crypto;
-using Org.BouncyCastle.Crypto.Operators;
-using Org.BouncyCastle.Math;
 using Org.BouncyCastle.Ocsp;
-using Org.BouncyCastle.X509;
+using Org.BouncyCastle.Security;
 using Org.BouncyCastle.X509.Extension;
+using X509Extension = System.Security.Cryptography.X509Certificates.X509Extension;
+using Org.BouncyCastle.Asn1.Ocsp;
+using NuGet.Common;
+using GeneralName = Org.BouncyCastle.Asn1.X509.GeneralName;
+using HashAlgorithmName = System.Security.Cryptography.HashAlgorithmName;
 
 namespace Test.Utility.Signing
 {
     public sealed class CertificateAuthority : HttpResponder
     {
-        private readonly Dictionary<BigInteger, X509Certificate> _issuedCertificates;
-        private readonly Dictionary<BigInteger, RevocationInfo> _revokedCertificates;
+        private readonly Dictionary<string, X509Certificate2> _issuedCertificates;
+        private readonly Dictionary<string, RevocationInfo> _revokedCertificates;
         private readonly Lazy<OcspResponder> _ocspResponder;
-        private BigInteger _nextSerialNumber;
+        private string _nextSerialNumber;
 
         /// <summary>
         /// This base URI is shared amongst all HTTP responders hosted by the same web host instance.
         /// </summary>
         public Uri SharedUri { get; }
 
-        public X509Certificate Certificate { get; }
+        public X509Certificate2 Certificate { get; }
 
         /// <summary>
         /// Gets the base URI specific to this HTTP responder.
@@ -37,15 +40,18 @@ namespace Test.Utility.Signing
         public override Uri Url { get; }
 
         public OcspResponder OcspResponder => _ocspResponder.Value;
+
         public CertificateAuthority Parent { get; }
 
         public Uri CertificateUri { get; }
+
         public Uri OcspResponderUri { get; }
-        internal AsymmetricCipherKeyPair KeyPair { get; }
+
+        internal RSA KeyPair { get; }
 
         private CertificateAuthority(
-            X509Certificate certificate,
-            AsymmetricCipherKeyPair keyPair,
+            X509Certificate2 certificate,
+            RSA keyPair,
             Uri sharedUri,
             CertificateAuthority parentCa)
         {
@@ -57,42 +63,46 @@ namespace Test.Utility.Signing
             CertificateUri = new Uri(Url, $"{fingerprint}.cer");
             OcspResponderUri = GenerateRandomUri();
             Parent = parentCa;
-            _nextSerialNumber = certificate.SerialNumber.Add(BigInteger.One);
-            _issuedCertificates = new Dictionary<BigInteger, X509Certificate>();
-            _revokedCertificates = new Dictionary<BigInteger, RevocationInfo>();
+            _nextSerialNumber = IncrementSerialByOne(certificate.SerialNumber);
+            _issuedCertificates = new Dictionary<string, X509Certificate2>();
+            _revokedCertificates = new Dictionary<string, RevocationInfo>();
             _ocspResponder = new Lazy<OcspResponder>(() => OcspResponder.Create(this));
         }
 
-        public X509Certificate IssueCertificate(IssueCertificateOptions options)
+        public X509Certificate2 IssueCertificate(IssueCertificateOptions options)
         {
             if (options == null)
             {
                 throw new ArgumentNullException(nameof(options));
             }
 
-            Action<X509V3CertificateGenerator> customizeCertificate = generator =>
-                {
-                    generator.AddExtension(
-                        X509Extensions.AuthorityInfoAccess,
-                        critical: false,
-                        extensionValue: new DerSequence(
+            var signatureGenerator = X509SignatureGenerator.CreateForRSA(options.KeyPair, RSASignaturePadding.Pkcs1);
+
+            void customizeCertificate(TestCertificateGenerator generator)
+            {
+                generator.Extensions.Add(
+                    new X509Extension(
+                        TestOids.AuthorityInfoAccess,
+                        new DerSequence(
                             new AccessDescription(AccessDescription.IdADOcsp,
                                 new GeneralName(GeneralName.UniformResourceIdentifier, OcspResponderUri.OriginalString)),
                             new AccessDescription(AccessDescription.IdADCAIssuers,
-                                new GeneralName(GeneralName.UniformResourceIdentifier, CertificateUri.OriginalString))));
-                    generator.AddExtension(
-                        X509Extensions.AuthorityKeyIdentifier,
-                        critical: false,
-                        extensionValue: new AuthorityKeyIdentifierStructure(Certificate));
-                    generator.AddExtension(
-                        X509Extensions.SubjectKeyIdentifier,
-                        critical: false,
-                        extensionValue: new SubjectKeyIdentifierStructure(options.KeyPair.Public));
-                    generator.AddExtension(
-                        X509Extensions.BasicConstraints,
-                        critical: true,
-                        extensionValue: new BasicConstraints(cA: false));
-                };
+                                new GeneralName(GeneralName.UniformResourceIdentifier, CertificateUri.OriginalString))).GetDerEncoded(),
+                        critical: false));
+
+                var publicKey = DotNetUtilities.GetRsaPublicKey(Certificate.GetRSAPublicKey());
+
+                generator.Extensions.Add(
+                    new X509Extension(
+                        Oids.AuthorityKeyIdentifier,
+                        new AuthorityKeyIdentifierStructure(publicKey).GetEncoded(),
+                        critical: false));
+                generator.Extensions.Add(
+                    new X509SubjectKeyIdentifierExtension(signatureGenerator.PublicKey, critical: false));
+                generator.Extensions.Add(
+                    new X509BasicConstraintsExtension(certificateAuthority: false, hasPathLengthConstraint: false, pathLengthConstraint: 0, critical: true));
+
+            }
 
             return IssueCertificate(options, customizeCertificate);
         }
@@ -101,36 +111,39 @@ namespace Test.Utility.Signing
         {
             options = options ?? IssueCertificateOptions.CreateDefaultForIntermediateCertificateAuthority();
 
-            Action<X509V3CertificateGenerator> customizeCertificate = generator =>
-                {
-                    generator.AddExtension(
-                        X509Extensions.AuthorityInfoAccess,
-                        critical: false,
-                        extensionValue: new DerSequence(
+            var signatureGenerator = X509SignatureGenerator.CreateForRSA(options.KeyPair, RSASignaturePadding.Pkcs1);
+
+            void customizeCertificate(TestCertificateGenerator generator)
+            {
+                generator.Extensions.Add(
+                    new X509Extension(
+                        TestOids.AuthorityInfoAccess,
+                        new DerSequence(
                             new AccessDescription(AccessDescription.IdADOcsp,
                                 new GeneralName(GeneralName.UniformResourceIdentifier, OcspResponderUri.OriginalString)),
                             new AccessDescription(AccessDescription.IdADCAIssuers,
-                                new GeneralName(GeneralName.UniformResourceIdentifier, CertificateUri.OriginalString))));
-                    generator.AddExtension(
-                        X509Extensions.AuthorityKeyIdentifier,
-                        critical: false,
-                        extensionValue: new AuthorityKeyIdentifierStructure(Certificate));
-                    generator.AddExtension(
-                        X509Extensions.SubjectKeyIdentifier,
-                        critical: false,
-                        extensionValue: new SubjectKeyIdentifierStructure(options.KeyPair.Public));
-                    generator.AddExtension(
-                        X509Extensions.BasicConstraints,
-                        critical: true,
-                        extensionValue: new BasicConstraints(cA: true));
-                };
+                                new GeneralName(GeneralName.UniformResourceIdentifier, CertificateUri.OriginalString))).GetDerEncoded(),
+                        critical: false));
+
+                var publicKey = DotNetUtilities.GetRsaPublicKey(Certificate.GetRSAPublicKey());
+
+                generator.Extensions.Add(
+                    new X509Extension(
+                        Oids.AuthorityKeyIdentifier,
+                        new AuthorityKeyIdentifierStructure(publicKey).GetEncoded(),
+                        critical: false));
+                generator.Extensions.Add(
+                    new X509SubjectKeyIdentifierExtension(signatureGenerator.PublicKey, critical: false));
+                generator.Extensions.Add(
+                    new X509BasicConstraintsExtension(certificateAuthority: true, hasPathLengthConstraint: false, pathLengthConstraint: 0, critical: true));
+            }
 
             var certificate = IssueCertificate(options, customizeCertificate);
 
             return new CertificateAuthority(certificate, options.KeyPair, SharedUri, parentCa: this);
         }
 
-        public void Revoke(X509Certificate certificate, RevocationReason reason, DateTimeOffset revocationDate)
+        public void Revoke(X509Certificate2 certificate, RevocationReason reason, DateTimeOffset revocationDate)
         {
             if (certificate == null)
             {
@@ -162,7 +175,8 @@ namespace Test.Utility.Signing
             if (IsGet(context.Request) &&
                 string.Equals(context.Request.RawUrl, CertificateUri.AbsolutePath, StringComparison.OrdinalIgnoreCase))
             {
-                WriteResponseBody(context.Response, Certificate.GetEncoded());
+                var bcCert = DotNetUtilities.FromX509Certificate(Certificate);
+                WriteResponseBody(context.Response, bcCert.GetEncoded());
             }
             else
             {
@@ -184,29 +198,23 @@ namespace Test.Utility.Signing
 
             options = options ?? IssueCertificateOptions.CreateDefaultForRootCertificateAuthority();
 
-            Action<X509V3CertificateGenerator> customizeCertificate = generator =>
-                {
-                    generator.AddExtension(
-                        X509Extensions.SubjectKeyIdentifier,
-                        critical: false,
-                        extensionValue: new SubjectKeyIdentifierStructure(options.KeyPair.Public));
-                    generator.AddExtension(
-                        X509Extensions.BasicConstraints,
-                        critical: true,
-                        extensionValue: new BasicConstraints(cA: true));
-                    generator.AddExtension(
-                        X509Extensions.KeyUsage,
-                        critical: true,
-                        extensionValue: new KeyUsage(KeyUsage.DigitalSignature | KeyUsage.KeyCertSign | KeyUsage.CrlSign));
-                };
+            var signatureGenerator = X509SignatureGenerator.CreateForRSA(options.KeyPair, RSASignaturePadding.Pkcs1);
 
-            var signatureFactory = new Asn1SignatureFactory(options.SignatureAlgorithmName, options.IssuerPrivateKey);
+            void customizeCertificate(TestCertificateGenerator generator)
+            {
+                generator.Extensions.Add(
+                    new X509SubjectKeyIdentifierExtension(signatureGenerator.PublicKey, critical: false));
+                generator.Extensions.Add(
+                    new X509BasicConstraintsExtension(certificateAuthority: true, hasPathLengthConstraint: false, pathLengthConstraint: 0, critical: true));
+                generator.Extensions.Add(
+                    new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyCertSign | X509KeyUsageFlags.CrlSign, critical: true));
+            }
 
             var certificate = CreateCertificate(
-                options.KeyPair.Public,
-                signatureFactory,
-                BigInteger.One,
-                options.SubjectName,
+                options.KeyPair,
+                HashAlgorithmName.SHA256,
+                RSASignaturePadding.Pkcs1,
+                "1",
                 options.SubjectName,
                 options.NotBefore,
                 options.NotAfter,
@@ -222,12 +230,14 @@ namespace Test.Utility.Signing
                 throw new ArgumentNullException(nameof(certificateId));
             }
 
-            if (certificateId.MatchesIssuer(Certificate) &&
-                _issuedCertificates.ContainsKey(certificateId.SerialNumber))
+            var bcCert = DotNetUtilities.FromX509Certificate(Certificate);
+
+            if (certificateId.MatchesIssuer(bcCert) &&
+                _issuedCertificates.ContainsKey(certificateId.SerialNumber.ToString()))
             {
                 RevocationInfo revocationInfo;
 
-                if (!_revokedCertificates.TryGetValue(certificateId.SerialNumber, out revocationInfo))
+                if (!_revokedCertificates.TryGetValue(certificateId.SerialNumber.ToString(), out revocationInfo))
                 {
                     return CertificateStatus.Good;
                 }
@@ -260,12 +270,11 @@ namespace Test.Utility.Signing
             }
         }
 
-        private X509Certificate IssueCertificate(
+        private X509Certificate2 IssueCertificate(
             IssueCertificateOptions options,
-            Action<X509V3CertificateGenerator> customizeCertificate)
+            Action<TestCertificateGenerator> customizeCertificate)
         {
             var serialNumber = _nextSerialNumber;
-            var issuerName = PrincipalUtilities.GetSubjectX509Principal(Certificate);
             var notAfter = options.NotAfter.UtcDateTime;
 
             // An issued certificate should not have a validity period beyond the issuer's validity period.
@@ -274,55 +283,82 @@ namespace Test.Utility.Signing
                 notAfter = Certificate.NotAfter;
             }
 
-            var signatureFactory = new Asn1SignatureFactory(options.SignatureAlgorithmName, options.IssuerPrivateKey ?? KeyPair.Private);
-
             var certificate = CreateCertificate(
-                options.KeyPair.Public,
-                signatureFactory,
+                options.KeyPair,
+                options.SignatureAlgorithmName,
+                RSASignaturePadding.Pkcs1,
                 serialNumber,
-                issuerName,
                 options.SubjectName,
                 options.NotBefore.UtcDateTime,
                 notAfter,
-                options.CustomizeCertificate ?? customizeCertificate);
+                options.CustomizeCertificate ?? customizeCertificate,
+                Certificate);
 
-            _nextSerialNumber = _nextSerialNumber.Add(BigInteger.One);
+            _nextSerialNumber = IncrementSerialByOne(_nextSerialNumber);
             _issuedCertificates.Add(certificate.SerialNumber, certificate);
 
             return certificate;
         }
 
-        private static X509Certificate CreateCertificate(
-            AsymmetricKeyParameter certificatePublicKey,
-            Asn1SignatureFactory signatureFactory,
-            BigInteger serialNumber,
-            X509Name issuerName,
-            X509Name subjectName,
+        private static X509Certificate2 CreateCertificate(
+            RSA certificateKey,
+            HashAlgorithmName hashAlgorithm,
+            RSASignaturePadding padding,
+            string serialNumber,
+            X500DistinguishedName subjectName,
             DateTimeOffset notBefore,
             DateTimeOffset notAfter,
-            Action<X509V3CertificateGenerator> customizeCertificate)
+            Action<TestCertificateGenerator> customizeCertificate,
+            X509Certificate2 issuer = null)
         {
-            var generator = new X509V3CertificateGenerator();
+            var request = new CertificateRequest(subjectName, certificateKey, hashAlgorithm, padding);
+
+            var generator = new TestCertificateGenerator();
 
             generator.SetSerialNumber(serialNumber);
-            generator.SetIssuerDN(issuerName);
-            generator.SetNotBefore(notBefore.UtcDateTime);
-            generator.SetNotAfter(notAfter.UtcDateTime);
-            generator.SetSubjectDN(subjectName);
-            generator.SetPublicKey(certificatePublicKey);
+            generator.NotBefore = notBefore.UtcDateTime;
+            generator.NotAfter = notAfter.UtcDateTime;
 
             customizeCertificate(generator);
 
-            return generator.Generate(signatureFactory);
+            foreach (var extension in generator.Extensions)
+            {
+                request.CertificateExtensions.Add(extension);
+            }
+
+            X509Certificate2 certResult;
+
+            if (issuer == null)
+            {
+                certResult = request.CreateSelfSigned(generator.NotBefore, generator.NotAfter);
+            }
+            else
+            {
+                using (var temp = request.Create(issuer, generator.NotBefore, generator.NotAfter, generator.SerialNumber))
+                {
+                    certResult = temp.CopyWithPrivateKey(certificateKey);
+                }
+            }
+
+            return new X509Certificate2(certResult.Export(X509ContentType.Pkcs12), password: (string)null, keyStorageFlags: X509KeyStorageFlags.Exportable);
+        }
+
+        private static string IncrementSerialByOne(string serialNumber)
+        {
+            var serial = Convert.ToInt64(serialNumber);
+
+            serial += 1;
+
+            return Convert.ToString(serial);
         }
 
         private sealed class RevocationInfo
         {
-            internal BigInteger SerialNumber { get; }
+            internal string SerialNumber { get; }
             internal DateTimeOffset RevocationDate { get; }
             internal RevocationReason Reason { get; }
 
-            internal RevocationInfo(BigInteger serialNumber, DateTimeOffset revocationDate, RevocationReason reason)
+            internal RevocationInfo(string serialNumber, DateTimeOffset revocationDate, RevocationReason reason)
             {
                 SerialNumber = serialNumber;
                 RevocationDate = revocationDate;

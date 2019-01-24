@@ -4,15 +4,19 @@
 using System;
 using System.Collections.Generic;
 using System.Net;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
+using NuGet.Packaging.Signing;
 using Org.BouncyCastle.Asn1;
 using Org.BouncyCastle.Asn1.Cmp;
 using Org.BouncyCastle.Asn1.X509;
-using Org.BouncyCastle.Crypto;
 using Org.BouncyCastle.Math;
+using Org.BouncyCastle.Security;
 using Org.BouncyCastle.Tsp;
-using Org.BouncyCastle.X509;
 using Org.BouncyCastle.X509.Extension;
 using Org.BouncyCastle.X509.Store;
+using GeneralName = Org.BouncyCastle.Asn1.X509.GeneralName;
+using X509Extension = System.Security.Cryptography.X509Certificates.X509Extension;
 
 namespace Test.Utility.Signing
 {
@@ -22,7 +26,7 @@ namespace Test.Utility.Signing
         private const string RequestContentType = "application/timestamp-query";
         private const string ResponseContentType = "application/timestamp-response";
 
-        private readonly AsymmetricCipherKeyPair _keyPair;
+        private readonly RSA _keyPair;
         private readonly TimestampServiceOptions _options;
         private readonly HashSet<BigInteger> _serialNumbers;
         private BigInteger _nextSerialNumber;
@@ -30,7 +34,7 @@ namespace Test.Utility.Signing
         /// <summary>
         /// Gets this certificate authority's certificate.
         /// </summary>
-        public X509Certificate Certificate { get; }
+        public X509Certificate2 Certificate { get; }
 
         /// <summary>
         /// Gets the base URI specific to this HTTP responder.
@@ -44,8 +48,8 @@ namespace Test.Utility.Signing
 
         private TimestampService(
             CertificateAuthority certificateAuthority,
-            X509Certificate certificate,
-            AsymmetricCipherKeyPair keyPair,
+            X509Certificate2 certificate,
+            RSA keyPair,
             Uri uri,
             TimestampServiceOptions options)
         {
@@ -75,36 +79,42 @@ namespace Test.Utility.Signing
                 issueCertificateOptions = IssueCertificateOptions.CreateDefaultForTimestampService();
             }
 
-            void customizeCertificate(X509V3CertificateGenerator generator)
+            void customizeCertificate(TestCertificateGenerator generator)
             {
-                generator.AddExtension(
-                    X509Extensions.AuthorityInfoAccess,
-                    critical: false,
-                    extensionValue: new DerSequence(
-                        new AccessDescription(AccessDescription.IdADOcsp,
-                            new GeneralName(GeneralName.UniformResourceIdentifier, certificateAuthority.OcspResponderUri.OriginalString)),
-                        new AccessDescription(AccessDescription.IdADCAIssuers,
-                            new GeneralName(GeneralName.UniformResourceIdentifier, certificateAuthority.CertificateUri.OriginalString))));
-                generator.AddExtension(
-                    X509Extensions.AuthorityKeyIdentifier,
-                    critical: false,
-                    extensionValue: new AuthorityKeyIdentifierStructure(certificateAuthority.Certificate));
-                generator.AddExtension(
-                    X509Extensions.SubjectKeyIdentifier,
-                    critical: false,
-                    extensionValue: new SubjectKeyIdentifierStructure(issueCertificateOptions.KeyPair.Public));
-                generator.AddExtension(
-                    X509Extensions.BasicConstraints,
-                    critical: true,
-                    extensionValue: new BasicConstraints(cA: false));
-                generator.AddExtension(
-                    X509Extensions.KeyUsage,
-                    critical: true,
-                    extensionValue: new KeyUsage(KeyUsage.DigitalSignature));
-                generator.AddExtension(
-                    X509Extensions.ExtendedKeyUsage,
-                    critical: true,
-                    extensionValue: ExtendedKeyUsage.GetInstance(new DerSequence(KeyPurposeID.IdKPTimeStamping)));
+                generator.Extensions.Add(
+                  new X509Extension(
+                      TestOids.AuthorityInfoAccess,
+                      new DerSequence(
+                          new AccessDescription(AccessDescription.IdADOcsp,
+                              new GeneralName(GeneralName.UniformResourceIdentifier, certificateAuthority.OcspResponderUri.OriginalString)),
+                          new AccessDescription(AccessDescription.IdADCAIssuers,
+                              new GeneralName(GeneralName.UniformResourceIdentifier, certificateAuthority.CertificateUri.OriginalString))).GetDerEncoded(),
+                      critical: false));
+
+                var publicKey = DotNetUtilities.GetRsaPublicKey(certificateAuthority.Certificate.GetRSAPublicKey());
+
+                generator.Extensions.Add(
+                    new X509Extension(
+                        Oids.AuthorityKeyIdentifier,
+                        new AuthorityKeyIdentifierStructure(publicKey).GetEncoded(),
+                        critical: false));
+
+                var signatureGenerator = X509SignatureGenerator.CreateForRSA(issueCertificateOptions.KeyPair, RSASignaturePadding.Pkcs1);
+
+                generator.Extensions.Add(
+                    new X509SubjectKeyIdentifierExtension(signatureGenerator.PublicKey, critical: false));
+                generator.Extensions.Add(
+                    new X509BasicConstraintsExtension(certificateAuthority: false, hasPathLengthConstraint: false, pathLengthConstraint: 0, critical: true));
+
+                generator.Extensions.Add(
+                    new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature, critical: true));
+
+                var usages = new OidCollection { new Oid(Oids.TimeStampingEku) };
+
+                generator.Extensions.Add(
+                    new X509EnhancedKeyUsageExtension(
+                          usages,
+                          critical: true));
             }
 
             if (issueCertificateOptions.CustomizeCertificate == null)
@@ -144,9 +154,12 @@ namespace Test.Utility.Signing
 
             var bytes = ReadRequestBody(context.Request);
             var request = new TimeStampRequest(bytes);
+
+            var keyPair = DotNetUtilities.GetRsaKeyPair(_keyPair);
+            var bcCert = DotNetUtilities.FromX509Certificate(Certificate);
             var tokenGenerator = new TimeStampTokenGenerator(
-                _keyPair.Private,
-                Certificate,
+                keyPair.Private,
+                bcCert,
                 _options.SignatureHashAlgorithm.Value,
                 _options.Policy.Value);
 

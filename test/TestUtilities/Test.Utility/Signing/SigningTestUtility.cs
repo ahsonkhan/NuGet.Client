@@ -309,10 +309,7 @@ namespace Test.Utility.Signing
             certGen.NotBefore = DateTime.UtcNow.Subtract(TimeSpan.FromMinutes(30));
 
             var random = new Random();
-            var serial = random.Next();
-            var serialNumber = BitConverter.GetBytes(serial);
-            Array.Reverse(serialNumber);
-            certGen.SetSerialNumber(serialNumber);
+            certGen.SetSerialNumber(random.Next());
 
             certGen.Extensions.Add(
                 new X509SubjectKeyIdentifierExtension(request.PublicKey, critical: false));

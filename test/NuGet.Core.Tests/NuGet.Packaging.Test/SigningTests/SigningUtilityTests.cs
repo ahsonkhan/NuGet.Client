@@ -564,8 +564,6 @@ namespace NuGet.Packaging.Test
                 Assert.True(await SignedArchiveTestUtility.IsSignedAsync(test.Options.OutputPackageStream));
 
                 Assert.Equal(0, test.Logger.Errors);
-                Assert.Equal(1, test.Logger.Warnings);
-                Assert.Equal(1, test.Logger.Messages.Count());
                 Assert.Equal(RuntimeEnvironmentHelper.IsLinux ? 2 : 1, test.Logger.Warnings);
 
                 SigningTestUtility.AssertUntrustedRoot(test.Logger.LogMessages, LogLevel.Warning);

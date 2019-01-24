@@ -56,9 +56,7 @@ namespace NuGet.Packaging.Test
         {
             using (var certificate = SigningTestUtility.GenerateCertificate("test", generator =>
                 {
-                    var bytes = BitConverter.GetBytes(1);
-                    Array.Reverse(bytes);
-                    generator.SetSerialNumber(bytes);
+                    generator.SetSerialNumber(1);
                 }))
             {
                 var issuerSerial = IssuerSerial.Create(certificate);
@@ -72,9 +70,7 @@ namespace NuGet.Packaging.Test
         {
             using (var certificate = SigningTestUtility.GenerateCertificate("test", generator =>
                 {
-                    var bytes = BitConverter.GetBytes(long.MaxValue);
-                    Array.Reverse(bytes);
-                    generator.SetSerialNumber(bytes);
+                    generator.SetSerialNumber(long.MaxValue);
                 }))
             {
                 var issuerSerial = IssuerSerial.Create(certificate);

@@ -187,32 +187,30 @@ namespace NuGet.CommandLine.FuncTest.Commands
             var nupkg = new SimpleTestPackageContext("A", "1.0.0");
             var testServer = await _testFixture.GetSigningTestServerAsync();
             var certificateAuthority = await _testFixture.GetDefaultTrustedCertificateAuthorityAsync();
+
             var issueOptions = IssueCertificateOptions.CreateDefaultForEndCertificate();
-            var bcCertificate = certificateAuthority.IssueCertificate(issueOptions);
 
             using (var context = new SimpleTestPathContext())
-            using (var testCertificate = new X509Certificate2(bcCertificate.GetEncoded()))
+            using (var testCertificate = certificateAuthority.IssueCertificate(issueOptions))
             {
-                testCertificate.PrivateKey = DotNetUtilities.ToRSA(issueOptions.KeyPair.Private as RsaPrivateCrtKeyParameters);
-
                 var signedPackagePath = await SignedArchiveTestUtility.AuthorSignPackageAsync(testCertificate, nupkg, context.WorkingDirectory);
                 SignedArchiveTestUtility.TamperWithPackage(signedPackagePath);
                 certificateAuthority.Revoke(
-                    bcCertificate,
+                    testCertificate,
                     RevocationReason.KeyCompromise,
                     DateTimeOffset.UtcNow);
 
                 var args = new string[]
                 {
-                    nupkg.Id,
-                    "-Version",
-                    nupkg.Version,
-                    "-DirectDownload",
-                    "-NoCache",
-                    "-Source",
-                    context.WorkingDirectory,
-                    "-OutputDirectory",
-                    Path.Combine(context.WorkingDirectory, "packages")
+                nupkg.Id,
+                "-Version",
+                nupkg.Version,
+                "-DirectDownload",
+                "-NoCache",
+                "-Source",
+                context.WorkingDirectory,
+                "-OutputDirectory",
+                Path.Combine(context.WorkingDirectory, "packages")
                 };
 
                 // Act

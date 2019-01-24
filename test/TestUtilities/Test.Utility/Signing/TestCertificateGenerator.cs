@@ -22,9 +22,33 @@ namespace Test.Utility.Signing
             Extensions = new Collection<X509Extension>();
         }
 
-        public void SetSerialNumber(byte[] serialNumber)
+        private void SetSerialNumber(byte[] serialNumber)
         {
             SerialNumber = serialNumber ?? throw new ArgumentNullException(nameof(serialNumber));
+        }
+
+        public void SetSerialNumber(long serialNumber)
+        {
+            if (serialNumber <= 0)
+            {
+                throw new ArgumentException("serial number cannot be negative");
+            }
+
+            var bytes = BitConverter.GetBytes(serialNumber);
+            Array.Reverse(bytes);
+
+            SerialNumber = bytes;
+        }
+
+        public void SetSerialNumber(string serialNumber)
+        {
+            if (string.IsNullOrEmpty(serialNumber))
+            {
+                throw new ArgumentException(nameof(serialNumber));
+            }
+
+            var serial = Convert.ToInt64(serialNumber);
+            SetSerialNumber(serial);
         }
     }
 }

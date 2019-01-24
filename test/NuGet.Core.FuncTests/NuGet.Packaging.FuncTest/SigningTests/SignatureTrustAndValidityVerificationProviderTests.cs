@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
@@ -13,12 +14,11 @@ using NuGet.Common;
 using NuGet.Packaging.Signing;
 using NuGet.Test.Utility;
 using Org.BouncyCastle.Asn1;
-using Org.BouncyCastle.Asn1.X509;
-using Org.BouncyCastle.Crypto.Parameters;
+
 using Test.Utility.Signing;
 using Xunit;
 using BcAccuracy = Org.BouncyCastle.Asn1.Tsp.Accuracy;
-using DotNetUtilities = Org.BouncyCastle.Security.DotNetUtilities;
+using HashAlgorithmName = NuGet.Common.HashAlgorithmName;
 
 namespace NuGet.Packaging.FuncTest
 {
@@ -160,49 +160,50 @@ namespace NuGet.Packaging.FuncTest
         {
             var ca = await _testFixture.GetDefaultTrustedCertificateAuthorityAsync();
             var timestampService = await _testFixture.GetDefaultTrustedTimestampServiceAsync();
-            var keyPair = SigningTestUtility.GenerateKeyPair(publicKeyLength: 2048);
             var now = DateTimeOffset.UtcNow;
-            var issueOptions = new IssueCertificateOptions()
+
+            using (var keyPair = RSA.Create(keySizeInBits: 2048))
             {
-                KeyPair = keyPair,
-                NotAfter = now.AddSeconds(10),
-                NotBefore = now.AddSeconds(-2),
-                SubjectName = new X509Name("CN=NuGet Test Expired Certificate")
-            };
-            var bcCertificate = ca.IssueCertificate(issueOptions);
-
-            using (var temp = new X509Certificate2(bcCertificate.GetEncoded()))
-            using (var certificate = temp.CopyWithPrivateKey(DotNetUtilities.ToRSA(keyPair.Private as RsaPrivateCrtKeyParameters)))
-            using (var directory = TestDirectory.Create())
-            {
-                var notAfter = certificate.NotAfter.ToUniversalTime();
-
-                var packageContext = new SimpleTestPackageContext();
-                var signedPackagePath = await SignedArchiveTestUtility.AuthorSignPackageAsync(
-                    certificate,
-                    packageContext,
-                    directory,
-                    timestampService.Url);
-
-                var waitDuration = (notAfter - DateTimeOffset.UtcNow).Add(TimeSpan.FromSeconds(1));
-
-                // Wait for the certificate to expire.  Trust of the signature will require a valid timestamp.
-                await Task.Delay(waitDuration);
-
-                Assert.True(DateTime.UtcNow > notAfter);
-
-                var verifier = new PackageSignatureVerifier(_trustProviders);
-
-                using (var packageReader = new PackageArchiveReader(signedPackagePath))
+                var issueOptions = new IssueCertificateOptions()
                 {
-                    var result = await verifier.VerifySignaturesAsync(packageReader, _verifyCommandSettings, CancellationToken.None);
+                    KeyPair = keyPair,
+                    NotAfter = now.AddSeconds(10),
+                    NotBefore = now.AddSeconds(-2),
+                    SubjectName = new X500DistinguishedName("CN=NuGet Test Expired Certificate")
+                };
 
-                    var trustProvider = result.Results.Single();
+                using (var certificate = ca.IssueCertificate(issueOptions))
+                using (var directory = TestDirectory.Create())
+                {
+                    var notAfter = certificate.NotAfter.ToUniversalTime();
 
-                    Assert.True(result.IsValid);
-                    Assert.Equal(SignatureVerificationStatus.Valid, trustProvider.Trust);
-                    Assert.Equal(0, trustProvider.Issues.Count(issue => issue.Level == LogLevel.Error));
-                    Assert.Equal(0, trustProvider.Issues.Count(issue => issue.Level == LogLevel.Warning));
+                    var packageContext = new SimpleTestPackageContext();
+                    var signedPackagePath = await SignedArchiveTestUtility.AuthorSignPackageAsync(
+                        certificate,
+                        packageContext,
+                        directory,
+                        timestampService.Url);
+
+                    var waitDuration = (notAfter - DateTimeOffset.UtcNow).Add(TimeSpan.FromSeconds(1));
+
+                    // Wait for the certificate to expire.  Trust of the signature will require a valid timestamp.
+                    await Task.Delay(waitDuration);
+
+                    Assert.True(DateTime.UtcNow > notAfter);
+
+                    var verifier = new PackageSignatureVerifier(_trustProviders);
+
+                    using (var packageReader = new PackageArchiveReader(signedPackagePath))
+                    {
+                        var result = await verifier.VerifySignaturesAsync(packageReader, _verifyCommandSettings, CancellationToken.None);
+
+                        var trustProvider = result.Results.Single();
+
+                        Assert.True(result.IsValid);
+                        Assert.Equal(SignatureVerificationStatus.Valid, trustProvider.Trust);
+                        Assert.Equal(0, trustProvider.Issues.Count(issue => issue.Level == LogLevel.Error));
+                        Assert.Equal(0, trustProvider.Issues.Count(issue => issue.Level == LogLevel.Warning));
+                    }
                 }
             }
         }
@@ -215,55 +216,56 @@ namespace NuGet.Packaging.FuncTest
             var accuracy = new BcAccuracy(seconds: new DerInteger(30), millis: null, micros: null);
             var serviceOptions = new TimestampServiceOptions() { Accuracy = accuracy };
             var timestampService = TimestampService.Create(ca, serviceOptions);
-            var keyPair = SigningTestUtility.GenerateKeyPair(publicKeyLength: 2048);
             var now = DateTimeOffset.UtcNow;
-            var issueOptions = new IssueCertificateOptions()
+
+            using (var keyPair = RSA.Create(keySizeInBits: 2048))
             {
-                KeyPair = keyPair,
-                NotAfter = now.AddSeconds(10),
-                NotBefore = now.AddSeconds(-2),
-                SubjectName = new X509Name("CN=NuGet Test Expired Certificate")
-            };
-            var bcCertificate = ca.IssueCertificate(issueOptions);
-
-            using (testServer.RegisterResponder(timestampService))
-            using (var temp = new X509Certificate2(bcCertificate.GetEncoded()))
-            using (var certificate = temp.CopyWithPrivateKey(DotNetUtilities.ToRSA(keyPair.Private as RsaPrivateCrtKeyParameters)))
-            using (var directory = TestDirectory.Create())
-            {
-                var packageContext = new SimpleTestPackageContext();
-                var signedPackagePath = await SignedArchiveTestUtility.AuthorSignPackageAsync(
-                    certificate,
-                    packageContext,
-                    directory,
-                    timestampService.Url);
-
-                var waitDuration = (issueOptions.NotAfter - DateTimeOffset.UtcNow).Add(TimeSpan.FromSeconds(1));
-
-                // Wait for the certificate to expire.  Trust of the signature will require a valid timestamp.
-                if (waitDuration > TimeSpan.Zero)
+                var issueOptions = new IssueCertificateOptions()
                 {
-                    await Task.Delay(waitDuration);
-                }
+                    KeyPair = keyPair,
+                    NotAfter = now.AddSeconds(10),
+                    NotBefore = now.AddSeconds(-2),
+                    SubjectName = new X500DistinguishedName("CN=NuGet Test Expired Certificate")
+                };
 
-                Assert.True(DateTime.UtcNow > issueOptions.NotAfter);
-
-                var verifier = new PackageSignatureVerifier(_trustProviders);
-
-                using (var packageReader = new PackageArchiveReader(signedPackagePath))
+                using (testServer.RegisterResponder(timestampService))
+                using (var certificate = ca.IssueCertificate(issueOptions))
+                using (var directory = TestDirectory.Create())
                 {
-                    var results = await verifier.VerifySignaturesAsync(packageReader, _verifyCommandSettings, CancellationToken.None);
-                    var result = results.Results.Single();
+                    var packageContext = new SimpleTestPackageContext();
+                    var signedPackagePath = await SignedArchiveTestUtility.AuthorSignPackageAsync(
+                        certificate,
+                        packageContext,
+                        directory,
+                        timestampService.Url);
 
-                    Assert.False(results.IsValid);
-                    Assert.Equal(SignatureVerificationStatus.Disallowed, result.Trust);
-                    Assert.Equal(1, result.Issues.Count(issue => issue.Level == LogLevel.Error));
-                    Assert.Equal(0, result.Issues.Count(issue => issue.Level == LogLevel.Warning));
+                    var waitDuration = (issueOptions.NotAfter - DateTimeOffset.UtcNow).Add(TimeSpan.FromSeconds(1));
 
-                    Assert.Contains(result.Issues, issue =>
-                        issue.Code == NuGetLogCode.NU3037 &&
-                        issue.Level == LogLevel.Error &&
-                        issue.Message.Contains("validity period has expired."));
+                    // Wait for the certificate to expire.  Trust of the signature will require a valid timestamp.
+                    if (waitDuration > TimeSpan.Zero)
+                    {
+                        await Task.Delay(waitDuration);
+                    }
+
+                    Assert.True(DateTime.UtcNow > issueOptions.NotAfter);
+
+                    var verifier = new PackageSignatureVerifier(_trustProviders);
+
+                    using (var packageReader = new PackageArchiveReader(signedPackagePath))
+                    {
+                        var results = await verifier.VerifySignaturesAsync(packageReader, _verifyCommandSettings, CancellationToken.None);
+                        var result = results.Results.Single();
+
+                        Assert.False(results.IsValid);
+                        Assert.Equal(SignatureVerificationStatus.Disallowed, result.Trust);
+                        Assert.Equal(1, result.Issues.Count(issue => issue.Level == LogLevel.Error));
+                        Assert.Equal(0, result.Issues.Count(issue => issue.Level == LogLevel.Warning));
+
+                        Assert.Contains(result.Issues, issue =>
+                            issue.Code == NuGetLogCode.NU3037 &&
+                            issue.Level == LogLevel.Error &&
+                            issue.Message.Contains("validity period has expired."));
+                    }
                 }
             }
         }
@@ -1838,20 +1840,18 @@ namespace NuGet.Packaging.FuncTest
                 var testServer = await _fixture.GetSigningTestServerAsync();
                 var certificateAuthority = await _fixture.GetDefaultTrustedCertificateAuthorityAsync();
                 var issueCertificateOptions = IssueCertificateOptions.CreateDefaultForEndCertificate();
-                var bcCertificate = certificateAuthority.IssueCertificate(issueCertificateOptions);
                 var timestampService = await _fixture.GetDefaultTrustedTimestampServiceAsync();
 
-                using (var temp = new X509Certificate2(bcCertificate.GetEncoded()))
-                using (var certificate = temp.CopyWithPrivateKey(DotNetUtilities.ToRSA(issueCertificateOptions.KeyPair.Private as RsaPrivateCrtKeyParameters)))
+                using (var certificate = certificateAuthority.IssueCertificate(issueCertificateOptions))
                 using (var test = await Test.CreateAuthorSignedPackageAsync(
                     certificate,
                     timestampService.Url))
                 using (var packageReader = new PackageArchiveReader(test.PackageFile.FullName))
                 {
-                    await certificateAuthority.OcspResponder.WaitForResponseExpirationAsync(bcCertificate);
+                    await certificateAuthority.OcspResponder.WaitForResponseExpirationAsync(certificate);
 
                     certificateAuthority.Revoke(
-                        bcCertificate,
+                        certificate,
                         RevocationReason.KeyCompromise,
                         DateTimeOffset.UtcNow.AddHours(-1));
 
@@ -2215,20 +2215,18 @@ namespace NuGet.Packaging.FuncTest
                 var testServer = await _fixture.GetSigningTestServerAsync();
                 var certificateAuthority = await _fixture.GetDefaultTrustedCertificateAuthorityAsync();
                 var issueCertificateOptions = IssueCertificateOptions.CreateDefaultForEndCertificate();
-                var bcCertificate = certificateAuthority.IssueCertificate(issueCertificateOptions);
                 var timestampService = await _fixture.GetDefaultTrustedTimestampServiceAsync();
 
-                using (var temp = new X509Certificate2(bcCertificate.GetEncoded()))
-                using(var certificate = temp.CopyWithPrivateKey(DotNetUtilities.ToRSA(issueCertificateOptions.KeyPair.Private as RsaPrivateCrtKeyParameters)))
+                using (var certificate = certificateAuthority.IssueCertificate(issueCertificateOptions))
                 using (var test = await Test.CreateRepositoryPrimarySignedPackageAsync(
                     certificate,
                     timestampService.Url))
                 using (var packageReader = new PackageArchiveReader(test.PackageFile.FullName))
                 {
-                    await certificateAuthority.OcspResponder.WaitForResponseExpirationAsync(bcCertificate);
+                    await certificateAuthority.OcspResponder.WaitForResponseExpirationAsync(certificate);
 
                     certificateAuthority.Revoke(
-                        bcCertificate,
+                        certificate,
                         RevocationReason.KeyCompromise,
                         DateTimeOffset.UtcNow.AddHours(-1));
 
@@ -2261,17 +2259,15 @@ namespace NuGet.Packaging.FuncTest
                 var testServer = await _fixture.GetSigningTestServerAsync();
                 var certificateAuthority = await _fixture.GetDefaultTrustedCertificateAuthorityAsync();
                 var issueCertificateOptions = IssueCertificateOptions.CreateDefaultForEndCertificate();
-                var bcCertificate = certificateAuthority.IssueCertificate(issueCertificateOptions);
 
-                using (var temp = new X509Certificate2(bcCertificate.GetEncoded()))
-                using (var certificate = temp.CopyWithPrivateKey(DotNetUtilities.ToRSA(issueCertificateOptions.KeyPair.Private as RsaPrivateCrtKeyParameters)))
+                using (var certificate = certificateAuthority.IssueCertificate(issueCertificateOptions))
                 using (var test = await Test.CreateRepositoryPrimarySignedPackageAsync(certificate))
                 using (var packageReader = new PackageArchiveReader(test.PackageFile.FullName))
                 {
-                    await certificateAuthority.OcspResponder.WaitForResponseExpirationAsync(bcCertificate);
+                    await certificateAuthority.OcspResponder.WaitForResponseExpirationAsync(certificate);
 
                     certificateAuthority.Revoke(
-                        bcCertificate,
+                        certificate,
                         RevocationReason.KeyCompromise,
                         DateTimeOffset.UtcNow.AddHours(-1));
 
@@ -2790,11 +2786,9 @@ namespace NuGet.Packaging.FuncTest
                 var testServer = await _fixture.GetSigningTestServerAsync();
                 var certificateAuthority = await _fixture.GetDefaultTrustedCertificateAuthorityAsync();
                 var issueCertificateOptions = IssueCertificateOptions.CreateDefaultForEndCertificate();
-                var bcCertificate = certificateAuthority.IssueCertificate(issueCertificateOptions);
                 var timestampService = await _fixture.GetDefaultTrustedTimestampServiceAsync();
 
-                using (var temp = new X509Certificate2(bcCertificate.GetEncoded()))
-                using (var certificate = temp.CopyWithPrivateKey(DotNetUtilities.ToRSA(issueCertificateOptions.KeyPair.Private as RsaPrivateCrtKeyParameters)))
+                using (var certificate = certificateAuthority.IssueCertificate(issueCertificateOptions))
                 using (var test = await Test.CreateAuthorSignedRepositoryCountersignedPackageAsync(
                     _fixture.TrustedTestCertificate.Source.Cert,
                     certificate,
@@ -2802,10 +2796,10 @@ namespace NuGet.Packaging.FuncTest
                     timestampService.Url))
                 using (var packageReader = new PackageArchiveReader(test.PackageFile.FullName))
                 {
-                    await certificateAuthority.OcspResponder.WaitForResponseExpirationAsync(bcCertificate);
+                    await certificateAuthority.OcspResponder.WaitForResponseExpirationAsync(certificate);
 
                     certificateAuthority.Revoke(
-                        bcCertificate,
+                        certificate,
                         RevocationReason.KeyCompromise,
                         DateTimeOffset.UtcNow.AddHours(-1));
 
@@ -2839,19 +2833,17 @@ namespace NuGet.Packaging.FuncTest
                 var testServer = await _fixture.GetSigningTestServerAsync();
                 var certificateAuthority = await _fixture.GetDefaultTrustedCertificateAuthorityAsync();
                 var issueCertificateOptions = IssueCertificateOptions.CreateDefaultForEndCertificate();
-                var bcCertificate = certificateAuthority.IssueCertificate(issueCertificateOptions);
 
-                using (var temp = new X509Certificate2(bcCertificate.GetEncoded()))
-                using (var certificate = temp.CopyWithPrivateKey(DotNetUtilities.ToRSA(issueCertificateOptions.KeyPair.Private as RsaPrivateCrtKeyParameters)))
+                using (var certificate = certificateAuthority.IssueCertificate(issueCertificateOptions))
                 using (var test = await Test.CreateAuthorSignedRepositoryCountersignedPackageAsync(
                     _fixture.TrustedTestCertificate.Source.Cert,
                     certificate))
                 using (var packageReader = new PackageArchiveReader(test.PackageFile.FullName))
                 {
-                    await certificateAuthority.OcspResponder.WaitForResponseExpirationAsync(bcCertificate);
+                    await certificateAuthority.OcspResponder.WaitForResponseExpirationAsync(certificate);
 
                     certificateAuthority.Revoke(
-                        bcCertificate,
+                        certificate,
                         RevocationReason.KeyCompromise,
                         DateTimeOffset.UtcNow.AddHours(-1));
 

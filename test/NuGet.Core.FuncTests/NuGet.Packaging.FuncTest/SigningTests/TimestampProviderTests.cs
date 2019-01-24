@@ -354,7 +354,7 @@ namespace NuGet.Packaging.FuncTest
             var certificateAuthority = await _testFixture.GetDefaultTrustedCertificateAuthorityAsync();
             var timestampServiceOptions = new TimestampServiceOptions() { SignatureHashAlgorithm = new Oid(Oids.Sha1) };
             var issueCertificateOptions = IssueCertificateOptions.CreateDefaultForTimestampService();
-            issueCertificateOptions.SignatureAlgorithmName = "SHA1WITHRSA";
+            issueCertificateOptions.SignatureAlgorithmName = System.Security.Cryptography.HashAlgorithmName.SHA1;
 
             var timestampService = TimestampService.Create(certificateAuthority, timestampServiceOptions, issueCertificateOptions);
 

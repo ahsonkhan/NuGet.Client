@@ -90,7 +90,7 @@ namespace NuGet.Packaging.FuncTest
             var rootCa = CertificateAuthority.Create(testServer.Url);
             var intermediateCa = rootCa.CreateIntermediateCertificateAuthority();
 
-            var rootCertificate = new X509Certificate2(rootCa.Certificate.GetEncoded());
+            var rootCertificate = new X509Certificate2(rootCa.Certificate);
 
             var storeName = StoreName.Root;
             var storeLocation = StoreLocation.CurrentUser;
