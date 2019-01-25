@@ -69,7 +69,7 @@ namespace NuGet.Packaging.FuncTest
                 Assert.Equal(test.Request.PackageOwners, repositoryCountersignature.PackageOwners);
             }
         }
-
+#if IS_DESKTOP
         [Fact]
         public async Task GetSignatureValue_WithSha256_ReturnsValue()
         {
@@ -82,7 +82,7 @@ namespace NuGet.Packaging.FuncTest
                 Assert.Equal(expectedValue, actualValue);
             }
         }
-
+#endif
         private static byte[] GetRepositoryCountersignatureSignatureValue(SignedCms signedCms)
         {
             var cmsSignedData = new CmsSignedData(signedCms.Encode());
