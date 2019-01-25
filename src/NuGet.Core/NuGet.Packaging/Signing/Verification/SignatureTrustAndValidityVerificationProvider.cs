@@ -64,12 +64,13 @@ namespace NuGet.Packaging.Signing
             var status = SignatureVerificationStatus.Unknown;
             var issues = Enumerable.Empty<SignatureLog>();
             var isUntrustedRootAllowed = IsUntrustedRootAllowed(signature);
+            var isUnknownRevocationAllowed = RuntimeEnvironmentHelper.IsLinux && isUntrustedRootAllowed;
 
             var verifySettings = new SignatureVerifySettings(
                 allowIllegal: settings.AllowIllegal,
                 allowUntrusted: settings.AllowUntrusted || isUntrustedRootAllowed,
-                allowUnknownRevocation: settings.AllowUnknownRevocation,
-                reportUnknownRevocation: settings.ReportUnknownRevocation,
+                allowUnknownRevocation: settings.AllowUnknownRevocation || isUnknownRevocationAllowed,
+                reportUnknownRevocation: settings.ReportUnknownRevocation && !isUnknownRevocationAllowed,
                 reportUntrustedRoot: !isUntrustedRootAllowed,
                 revocationMode: settings.RevocationMode);
 
