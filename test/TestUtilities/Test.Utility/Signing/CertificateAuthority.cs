@@ -17,6 +17,8 @@ using Org.BouncyCastle.Asn1.Ocsp;
 using NuGet.Common;
 using GeneralName = Org.BouncyCastle.Asn1.X509.GeneralName;
 using HashAlgorithmName = System.Security.Cryptography.HashAlgorithmName;
+using System.Numerics;
+using System.Globalization;
 
 namespace Test.Utility.Signing
 {
@@ -25,7 +27,7 @@ namespace Test.Utility.Signing
         private readonly Dictionary<string, X509Certificate2> _issuedCertificates;
         private readonly Dictionary<string, RevocationInfo> _revokedCertificates;
         private readonly Lazy<OcspResponder> _ocspResponder;
-        private string _nextSerialNumber;
+        private BigInteger _nextSerialNumber;
 
         /// <summary>
         /// This base URI is shared amongst all HTTP responders hosted by the same web host instance.
@@ -63,7 +65,8 @@ namespace Test.Utility.Signing
             CertificateUri = new Uri(Url, $"{fingerprint}.cer");
             OcspResponderUri = GenerateRandomUri();
             Parent = parentCa;
-            _nextSerialNumber = IncrementSerialByOne(certificate.SerialNumber);
+            var cerSerial = BigInteger.Parse(certificate.SerialNumber, NumberStyles.HexNumber);
+            _nextSerialNumber = BigInteger.Add(cerSerial, BigInteger.One);
             _issuedCertificates = new Dictionary<string, X509Certificate2>();
             _revokedCertificates = new Dictionary<string, RevocationInfo>();
             _ocspResponder = new Lazy<OcspResponder>(() => OcspResponder.Create(this));
@@ -214,7 +217,7 @@ namespace Test.Utility.Signing
                 options.KeyPair,
                 HashAlgorithmName.SHA256,
                 RSASignaturePadding.Pkcs1,
-                "1",
+                BigInteger.One,
                 options.SubjectName,
                 options.NotBefore,
                 options.NotAfter,
@@ -294,7 +297,7 @@ namespace Test.Utility.Signing
                 options.CustomizeCertificate ?? customizeCertificate,
                 Certificate);
 
-            _nextSerialNumber = IncrementSerialByOne(_nextSerialNumber);
+            _nextSerialNumber = BigInteger.Add(_nextSerialNumber, BigInteger.One);
             _issuedCertificates.Add(certificate.SerialNumber, certificate);
 
             return certificate;
@@ -304,7 +307,7 @@ namespace Test.Utility.Signing
             RSA certificateKey,
             HashAlgorithmName hashAlgorithm,
             RSASignaturePadding padding,
-            string serialNumber,
+            BigInteger serialNumber,
             X500DistinguishedName subjectName,
             DateTimeOffset notBefore,
             DateTimeOffset notAfter,
@@ -313,11 +316,12 @@ namespace Test.Utility.Signing
         {
             var request = new CertificateRequest(subjectName, certificateKey, hashAlgorithm, padding);
 
-            var generator = new TestCertificateGenerator();
-
-            generator.SetSerialNumber(serialNumber);
-            generator.NotBefore = notBefore.UtcDateTime;
-            generator.NotAfter = notAfter.UtcDateTime;
+            var generator = new TestCertificateGenerator
+            {
+                SerialNumber = serialNumber,
+                NotBefore = notBefore.UtcDateTime,
+                NotAfter = notAfter.UtcDateTime
+            };
 
             customizeCertificate(generator);
 
@@ -334,22 +338,13 @@ namespace Test.Utility.Signing
             }
             else
             {
-                using (var temp = request.Create(issuer, generator.NotBefore, generator.NotAfter, generator.SerialNumber))
+                using (var temp = request.Create(issuer, generator.NotBefore, generator.NotAfter, generator.SerialNumber.ToByteArray()))
                 {
                     certResult = temp.CopyWithPrivateKey(certificateKey);
                 }
             }
 
             return new X509Certificate2(certResult.Export(X509ContentType.Pkcs12), password: (string)null, keyStorageFlags: X509KeyStorageFlags.Exportable);
-        }
-
-        private static string IncrementSerialByOne(string serialNumber)
-        {
-            var serial = Convert.ToInt64(serialNumber);
-
-            serial += 1;
-
-            return Convert.ToString(serial);
         }
 
         private sealed class RevocationInfo

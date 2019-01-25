@@ -273,7 +273,7 @@ namespace Test.Utility.Signing
             certGen.NotBefore = DateTime.UtcNow.Subtract(TimeSpan.FromMinutes(30));
 
             var random = new Random();
-            certGen.SetSerialNumber(random.Next());
+            certGen.SerialNumber = random.Next();
 
             certGen.Extensions.Add(
                 new X509SubjectKeyIdentifierExtension(request.PublicKey, critical: false));
@@ -318,7 +318,7 @@ namespace Test.Utility.Signing
             }
             else
             {
-                using (var temp = request.Create(issuer, certGen.NotBefore, certGen.NotAfter, certGen.SerialNumber))
+                using (var temp = request.Create(issuer, certGen.NotBefore, certGen.NotAfter, certGen.SerialNumber.ToByteArray()))
                 {
                     certResult = temp.CopyWithPrivateKey(rsa);
                 }

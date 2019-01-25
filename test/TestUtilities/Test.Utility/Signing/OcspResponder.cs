@@ -70,7 +70,8 @@ namespace Test.Utility.Signing
             }
 
             var ocspReq = new OcspReq(bytes);
-            var respId = new RespID(new X509Name(CertificateAuthority.Certificate.Subject));
+            var pKey = CertificateAuthority.Certificate.GetRSAPublicKey();
+            var respId = new RespID(DotNetUtilities.GetRsaPublicKey(pKey));
             var basicOcspRespGenerator = new BasicOcspRespGenerator(respId);
             var requests = ocspReq.GetRequestList();
             var nonce = ocspReq.GetExtensionValue(OcspObjectIdentifiers.PkixOcspNonce);

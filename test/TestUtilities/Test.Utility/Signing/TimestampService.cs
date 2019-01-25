@@ -167,7 +167,7 @@ namespace Test.Utility.Signing
             {
                 var certificates = X509StoreFactory.Create(
                     "Certificate/Collection",
-                    new X509CollectionStoreParameters(new[] { Certificate }));
+                    new X509CollectionStoreParameters(new[] { bcCert }));
 
                 tokenGenerator.SetCertificates(certificates);
             }
