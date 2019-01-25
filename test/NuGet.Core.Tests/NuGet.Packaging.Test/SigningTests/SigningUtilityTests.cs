@@ -107,17 +107,16 @@ namespace NuGet.Packaging.Test
                 Assert.Equal("Certificate chain validation failed.", exception.Message);
 
                 Assert.Equal(1, logger.Errors);
-                Assert.Equal(1, logger.Warnings);
+                Assert.Equal(RuntimeEnvironmentHelper.IsLinux ? 2 : 1, logger.Warnings);
+                SigningTestUtility.AssertUntrustedRoot(logger.LogMessages, LogLevel.Warning);
 
                 if (RuntimeEnvironmentHelper.IsWindows)
                 {
                     AssertNotTimeValid(logger.LogMessages, LogLevel.Error);
-                    SigningTestUtility.AssertUntrustedRoot(logger.LogMessages, LogLevel.Warning);
                 }
                 else if (RuntimeEnvironmentHelper.IsMacOSX)
                 {
                     AssertExpiredCertificate(logger.LogMessages, LogLevel.Error);
-                    SigningTestUtility.AssertUntrustedRoot(logger.LogMessages, LogLevel.Warning); 
                 }
                 else
                 {
@@ -527,17 +526,16 @@ namespace NuGet.Packaging.Test
                 Assert.Equal("Certificate chain validation failed.", exception.Message);
 
                 Assert.Equal(1, test.Logger.Errors);
-                Assert.Equal(1, test.Logger.Warnings);
+                Assert.Equal(RuntimeEnvironmentHelper.IsLinux ? 2 : 1, test.Logger.Warnings);
+                SigningTestUtility.AssertUntrustedRoot(test.Logger.LogMessages, LogLevel.Warning);
 
                 if (RuntimeEnvironmentHelper.IsWindows)
                 {
                     AssertNotTimeValid(test.Logger.LogMessages, LogLevel.Error);
-                    SigningTestUtility.AssertUntrustedRoot(test.Logger.LogMessages, LogLevel.Warning);
                 }
                 else if (RuntimeEnvironmentHelper.IsMacOSX)
                 {
                     AssertExpiredCertificate(test.Logger.LogMessages, LogLevel.Error);
-                    SigningTestUtility.AssertUntrustedRoot(test.Logger.LogMessages, LogLevel.Warning);
                 }
                 else
                 {

@@ -51,9 +51,10 @@ namespace NuGet.Packaging.FuncTest
                     certificateExtraStore: test.PrimarySignature.SignedCms.Certificates);
 
                 Assert.Equal(SignatureVerificationStatus.Disallowed, result.Status);
-                Assert.Equal(1, result.Issues.Count(issue => issue.Level == LogLevel.Error));
+                Assert.Equal(RuntimeEnvironmentHelper.IsLinux ? 2 : 1, result.Issues.Count(issue => issue.Level == LogLevel.Error));
 
                 AssertUntrustedRoot(result.Issues, LogLevel.Error);
+                SigningTestUtility.AssertOfflineRevocation(result.Issues, LogLevel.Error);
             }
         }
 
@@ -63,7 +64,7 @@ namespace NuGet.Packaging.FuncTest
             var settings = new SignatureVerifySettings(
                 allowIllegal: false,
                 allowUntrusted: true,
-                allowUnknownRevocation: false,
+                allowUnknownRevocation: true,
                 reportUnknownRevocation: true,
                 reportUntrustedRoot: true,
                 revocationMode: RevocationMode.Online);
@@ -78,7 +79,7 @@ namespace NuGet.Packaging.FuncTest
 
                 Assert.Equal(SignatureVerificationStatus.Valid, result.Status);
                 Assert.Equal(0, result.Issues.Count(issue => issue.Level == LogLevel.Error));
-                Assert.Equal(1, result.Issues.Count(issue => issue.Level == LogLevel.Warning));
+                Assert.Equal(RuntimeEnvironmentHelper.IsLinux ? 2 : 1, result.Issues.Count(issue => issue.Level == LogLevel.Warning));
             }
         }
 
@@ -88,8 +89,8 @@ namespace NuGet.Packaging.FuncTest
             var settings = new SignatureVerifySettings(
                 allowIllegal: false,
                 allowUntrusted: true,
-                allowUnknownRevocation: false,
-                reportUnknownRevocation: true,
+                allowUnknownRevocation: true,
+                reportUnknownRevocation: false,
                 reportUntrustedRoot: false,
                 revocationMode: RevocationMode.Online);
 
