@@ -14,8 +14,7 @@ using NuGet.Packaging.Signing;
 using NuGet.Test.Utility;
 using Org.BouncyCastle.Asn1;
 using Org.BouncyCastle.Asn1.X509;
-using Org.BouncyCastle.Crypto;
-using Org.BouncyCastle.Crypto.Generators;
+using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Security;
 using Org.BouncyCastle.X509.Extension;
 using Xunit;
@@ -248,16 +247,18 @@ namespace Test.Utility.Signing
         {
             if (string.IsNullOrEmpty(subjectName))
             {
-                subjectName = "NuGetTest";
+                subjectName = $"NuGet Test Self-Issued Certificate ({Guid.NewGuid().ToString()})";
             }
 
             // Create cert
-            var subjectDN = $"CN={subjectName}";
+            var subjectDN = $"C=US,S=WA,L=Redmond,O=NuGet,CN={subjectName}";
             var certGen = new TestCertificateGenerator();
 
             var isSelfSigned = true;
+            var isCA = false;
             X509Certificate2 issuer = null;
             DateTimeOffset? notAfter = null;
+            RsaKeyParameters issuerPublicKey = null;
 
             var keyUsage = X509KeyUsageFlags.DigitalSignature;
 
@@ -270,13 +271,7 @@ namespace Test.Utility.Signing
                     issuer = chainCertificateRequest?.Issuer;
 
                     notAfter = issuer.NotAfter.Subtract(TimeSpan.FromMinutes(5));
-                    var publicKey = DotNetUtilities.GetRsaPublicKey(issuer.GetRSAPublicKey());
-
-                    certGen.Extensions.Add(
-                        new X509Extension(
-                            Oids.AuthorityKeyIdentifier,
-                            new AuthorityKeyIdentifierStructure(publicKey).GetEncoded(),
-                            critical: false));
+                    issuerPublicKey = DotNetUtilities.GetRsaPublicKey(issuer.GetRSAPublicKey());
                 }
 
                 if (chainCertificateRequest.ConfigureCrl)
@@ -299,6 +294,7 @@ namespace Test.Utility.Signing
                 {
                     // update key usage with CA cert sign and crl sign attributes
                     keyUsage |= X509KeyUsageFlags.CrlSign | X509KeyUsageFlags.KeyCertSign;
+                    isCA = true;
                 }
             }
 
@@ -313,10 +309,27 @@ namespace Test.Utility.Signing
 
             certGen.Extensions.Add(
                 new X509SubjectKeyIdentifierExtension(request.PublicKey, critical: false));
+
+            if (!isSelfSigned | isCA)
+            {
+                certGen.Extensions.Add(
+                  new X509Extension(
+                      Oids.AuthorityKeyIdentifier,
+                      new AuthorityKeyIdentifierStructure(issuerPublicKey).GetEncoded(),
+                      critical: false));
+
+                if (isCA)
+                {
+                    // The RFC 5280 states that If the cA boolean is not asserted,
+                    // then the keyCertSign bit in the key usage extension MUST NOT be
+                    // asserted.
+                    certGen.Extensions.Add(
+                        new X509BasicConstraintsExtension(certificateAuthority: true, hasPathLengthConstraint: false, pathLengthConstraint: 0, critical: true));
+                }
+            }
+
             certGen.Extensions.Add(
                 new X509KeyUsageExtension(keyUsage, critical: false));
-            certGen.Extensions.Add(
-                new X509BasicConstraintsExtension(certificateAuthority: chainCertificateRequest?.IsCA ?? false, hasPathLengthConstraint: false, pathLengthConstraint: 0, critical: true));
 
             // Allow changes
             modifyGenerator?.Invoke(certGen);
@@ -354,44 +367,14 @@ namespace Test.Utility.Signing
             return null;
         }
 
-        /// <summary>
-        /// Create a self signed certificate.
-        /// </summary>
-        public static X509Certificate2 GenerateCertificate(
-            string subjectName,
-            RSA algorithm)
-        {
-            if (string.IsNullOrEmpty(subjectName))
-            {
-                subjectName = "NuGetTest";
-            }
-
-            var subjectDN = new X500DistinguishedName($"CN={subjectName}");
-            var hashAlgorithm = System.Security.Cryptography.HashAlgorithmName.SHA256;
-            var request = new CertificateRequest(subjectDN, algorithm, hashAlgorithm, RSASignaturePadding.Pkcs1);
-
-            request.CertificateExtensions.Add(
-                new X509SubjectKeyIdentifierExtension(request.PublicKey, critical: false));
-            request.CertificateExtensions.Add(
-                new X509BasicConstraintsExtension(certificateAuthority: true, hasPathLengthConstraint: false, pathLengthConstraint: 0, critical: true));
-            request.CertificateExtensions.Add(
-                new X509KeyUsageExtension(X509KeyUsageFlags.KeyCertSign, critical: true));
-            request.CertificateExtensions.Add(
-                new X509EnhancedKeyUsageExtension(new OidCollection { new Oid(Oids.CodeSigningEku) }, critical: true));
-
-            var certResult = request.CreateSelfSigned(notBefore: DateTime.UtcNow.Subtract(TimeSpan.FromHours(1)), notAfter: DateTime.UtcNow.Add(TimeSpan.FromHours(1)));
-
-            return new X509Certificate2(certResult.Export(X509ContentType.Pkcs12), password: (string)null, keyStorageFlags: X509KeyStorageFlags.Exportable);
-        }
-
         public static X509Certificate2 GenerateCertificate(
             string issuerName,
             string subjectName,
             RSA issuerAlgorithm,
             RSA algorithm)
         {
-            var subjectDN = $"CN={subjectName}";
-            var issuerDN = new X500DistinguishedName($"CN={issuerName}");
+            var subjectDN = $"C=US,S=WA,L=Redmond,O=NuGet,CN={subjectName}";
+            var issuerDN = new X500DistinguishedName($"C=US,S=WA,L=Redmond,O=NuGet,CN={issuerName}");
 
             var notAfter = DateTime.UtcNow.Add(TimeSpan.FromHours(1));
             var notBefore = DateTime.UtcNow.Subtract(TimeSpan.FromHours(1));
@@ -405,11 +388,14 @@ namespace Test.Utility.Signing
             var request = new CertificateRequest(subjectDN, algorithm, hashAlgorithm, RSASignaturePadding.Pkcs1);
 
             request.CertificateExtensions.Add(
-                new X509BasicConstraintsExtension(certificateAuthority: true, hasPathLengthConstraint: false, pathLengthConstraint: 0,  critical: true));
+                new X509BasicConstraintsExtension(certificateAuthority: true, hasPathLengthConstraint: false, pathLengthConstraint: 0, critical: true));
             request.CertificateExtensions.Add(
                 new X509SubjectKeyIdentifierExtension(request.PublicKey, critical: false));
+            // The RFC 5280 states that If the cA boolean is not asserted,
+            // then the keyCertSign bit in the key usage extension MUST NOT be
+            // asserted.
             request.CertificateExtensions.Add(
-                new X509KeyUsageExtension(X509KeyUsageFlags.KeyCertSign, critical: true));
+                new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyCertSign, critical: true));
             request.CertificateExtensions.Add(
                 new X509EnhancedKeyUsageExtension(new OidCollection { new Oid(Oids.CodeSigningEku) }, critical: true));
 
@@ -422,67 +408,55 @@ namespace Test.Utility.Signing
             }
         }
 
-        public static X509Certificate2 GenerateSelfIssuedCertificate(bool isCa)
+        /// <summary>
+        /// Create a self signed certificate.
+        /// </summary>
+        public static X509Certificate2 GenerateSelfIssuedCertificate(RSA algorithm, string subjectName = null, bool isCa = true)
         {
-            using (var rsa = RSA.Create(keySizeInBits: 2048))
+            if (string.IsNullOrEmpty(subjectName))
             {
-                var subjectName = new X500DistinguishedName($"C=US,S=WA,L=Redmond,O=NuGet,CN=NuGet Test Self-Issued Certificate ({Guid.NewGuid().ToString()})");
-                var hashAlgorithm = System.Security.Cryptography.HashAlgorithmName.SHA256;
-                var request = new CertificateRequest(subjectName, rsa, hashAlgorithm, RSASignaturePadding.Pkcs1);
+                subjectName = $"NuGet Test Self-Issued Certificate ({Guid.NewGuid().ToString()})";
+            }
 
-                var keyUsages = X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyCertSign | X509KeyUsageFlags.CrlSign;
+            var subjectDN = new X500DistinguishedName($"C=US,S=WA,L=Redmond,O=NuGet,CN={subjectName}");
 
-                if (isCa)
-                {
-                    keyUsages |= X509KeyUsageFlags.KeyCertSign;
-                }
+            var hashAlgorithm = System.Security.Cryptography.HashAlgorithmName.SHA256;
+            var request = new CertificateRequest(subjectDN, algorithm, hashAlgorithm, RSASignaturePadding.Pkcs1);
 
-                request.CertificateExtensions.Add(
-                    new X509SubjectKeyIdentifierExtension(request.PublicKey, critical: false));
+            var keyUsages = X509KeyUsageFlags.DigitalSignature;
 
-                var publicKey = DotNetUtilities.GetRsaPublicKey(rsa);
+            request.CertificateExtensions.Add(
+                new X509SubjectKeyIdentifierExtension(request.PublicKey, critical: false));
+
+            if (isCa)
+            {
+                keyUsages |= X509KeyUsageFlags.KeyCertSign | X509KeyUsageFlags.CrlSign;
+
+                var publicKey = DotNetUtilities.GetRsaPublicKey(algorithm);
 
                 request.CertificateExtensions.Add(
                     new X509Extension(
                         Oids.AuthorityKeyIdentifier,
                         new AuthorityKeyIdentifierStructure(publicKey).GetEncoded(),
                         critical: false));
+
+                // The RFC 5280 states that If the cA boolean is not asserted,
+                // then the keyCertSign bit in the key usage extension MUST NOT be
+                // asserted.
                 request.CertificateExtensions.Add(
-                    new X509BasicConstraintsExtension(certificateAuthority: isCa, hasPathLengthConstraint: false, pathLengthConstraint: 0, critical: true));
-                request.CertificateExtensions.Add(
-                    new X509KeyUsageExtension(keyUsages, critical: true));
-
-                var now = DateTime.UtcNow;
-                var certResult = request.CreateSelfSigned(notBefore: now, notAfter: now.AddHours(1));
-
-                return new X509Certificate2(certResult.Export(X509ContentType.Pkcs12), password: (string)null, keyStorageFlags: X509KeyStorageFlags.Exportable);
-            }
-        }
-
-        private static X509SubjectKeyIdentifierExtension GetSubjectKeyIdentifier(X509Certificate2 issuer)
-        {
-            var subjectKeyIdentifierOid = "2.5.29.14";
-
-            foreach (var extension in issuer.Extensions)
-            {
-                if (string.Equals(extension.Oid.Value, subjectKeyIdentifierOid))
-                {
-                    return extension as X509SubjectKeyIdentifierExtension;
-                }
+                    new X509BasicConstraintsExtension(certificateAuthority: isCa, hasPathLengthConstraint: false, pathLengthConstraint: 0, critical: false));
             }
 
-            return null;
-        }
+            request.CertificateExtensions.Add(
+                new X509EnhancedKeyUsageExtension(new OidCollection { new Oid(Oids.CodeSigningEku) }, critical: true));
 
-        public static AsymmetricCipherKeyPair GenerateKeyPair(int publicKeyLength)
-        {
-            var random = new SecureRandom();
-            var keyPairGenerator = new RsaKeyPairGenerator();
-            var parameters = new KeyGenerationParameters(random, publicKeyLength);
+            request.CertificateExtensions.Add(
+                new X509KeyUsageExtension(keyUsages, critical: true));
 
-            keyPairGenerator.Init(parameters);
+            var now = DateTime.UtcNow;
+            var certResult = request.CreateSelfSigned(notBefore: now.Subtract(TimeSpan.FromHours(1)), notAfter: now.AddHours(1));
 
-            return keyPairGenerator.GenerateKeyPair();
+            return new X509Certificate2(certResult.Export(X509ContentType.Pkcs12), password: (string)null, keyStorageFlags: X509KeyStorageFlags.Exportable);
         }
 
         /// <summary>

@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 using NuGet.CommandLine.Test;
@@ -266,13 +267,16 @@ namespace NuGet.CommandLine.FuncTest.Commands
             {
                 if (_untrustedSelfIssuedCertificateInCertificateStore == null)
                 {
-                    var certificate = SigningTestUtility.GenerateSelfIssuedCertificate(isCa: false);
+                    using (var rsa = RSA.Create(keySizeInBits: 2048))
+                    {
+                        var certificate = SigningTestUtility.GenerateSelfIssuedCertificate(rsa, isCa: false);
 
-                    _untrustedSelfIssuedCertificateInCertificateStore = TrustedTestCert.Create(
-                        certificate,
-                        StoreName.My,
-                        StoreLocation.CurrentUser,
-                        CertificatesDirectory);
+                        _untrustedSelfIssuedCertificateInCertificateStore = TrustedTestCert.Create(
+                            certificate,
+                            StoreName.My,
+                            StoreLocation.CurrentUser,
+                            CertificatesDirectory);
+                    }
                 }
 
                 return new X509Certificate2(_untrustedSelfIssuedCertificateInCertificateStore.Source);

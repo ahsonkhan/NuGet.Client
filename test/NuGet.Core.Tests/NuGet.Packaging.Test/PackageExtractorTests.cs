@@ -8,6 +8,7 @@ using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
@@ -24,6 +25,7 @@ using NuGet.Test.Utility;
 using NuGet.Versioning;
 using Test.Utility.Signing;
 using Xunit;
+using HashAlgorithmName = NuGet.Common.HashAlgorithmName;
 
 namespace NuGet.Packaging.Test
 {
@@ -2064,7 +2066,8 @@ namespace NuGet.Packaging.Test
         {
             // Arrange
             using (var dir = TestDirectory.Create())
-            using (var repoCertificate = SigningTestUtility.GenerateSelfIssuedCertificate(isCa: false))
+            using (var rsa = RSA.Create(keySizeInBits: 2048))
+            using (var repoCertificate = SigningTestUtility.GenerateSelfIssuedCertificate(rsa, isCa: false))
             {
                 var nupkg = new SimpleTestPackageContext();
                 var resolver = new PackagePathResolver(dir);

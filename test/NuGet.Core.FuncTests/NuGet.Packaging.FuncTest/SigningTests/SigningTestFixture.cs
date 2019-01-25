@@ -113,8 +113,8 @@ namespace NuGet.Packaging.FuncTest
                     using (var rsa = RSA.Create(keySizeInBits: 2048))
                     {
                         var certificateName = TestCertificate.GenerateCertificateName();
-                        var certificate1 = SigningTestUtility.GenerateCertificate(certificateName, rsa);
-                        var certificate2 = SigningTestUtility.GenerateCertificate(certificateName, rsa);
+                        var certificate1 = SigningTestUtility.GenerateSelfIssuedCertificate(rsa, certificateName);
+                        var certificate2 = SigningTestUtility.GenerateSelfIssuedCertificate(rsa, certificateName);
 
                         var temp1 = new TestCertificate() { Cert = certificate1 };
                         var temp2 = new TestCertificate() { Cert = certificate2 };

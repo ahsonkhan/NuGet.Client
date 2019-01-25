@@ -116,7 +116,7 @@ namespace Test.Utility.Signing
         {
             var certDir = @"/usr/local/share/ca-certificates";
 
-            var tempCertFileName = "NuGetTest-" + Guid.NewGuid().ToString() + ".crt";
+            var tempCertFileName = GetCertificateName() + ".crt";
             var tempCertPath = Path.Combine(dir, tempCertFileName);
 
             var bcCert = DotNetUtilities.FromX509Certificate(TrustedCert);
@@ -137,13 +137,28 @@ namespace Test.Utility.Signing
         {
             var exportedCert = TrustedCert.Export(X509ContentType.Cert);
 
-            var tempCertFileName = "NuGetTest-" + Guid.NewGuid().ToString() + ".cer";
+            var tempCertFileName = GetCertificateName() + ".cer";
 
             _systemTrustedCertPath = Path.Combine(dir, tempCertFileName);
             File.WriteAllBytes(_systemTrustedCertPath, exportedCert);
 
             var trustProcess = Process.Start(@"/usr/bin/sudo", $@"security -v add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain {_systemTrustedCertPath}");
             trustProcess.WaitForExit();
+        }
+
+        private string GetCertificateName()
+        {
+            var parts = TrustedCert.SubjectName.Name.Split('=');
+
+            for (var i = 0; i < parts.Length; i++)
+            {
+                if (string.Equals(parts[i], "CN") && i + 1 < parts.Length)
+                {
+                    return parts[i + 1];
+                }
+            }
+
+            return "NuGetTest-" + Guid.NewGuid().ToString();
         }
 
         private void DisposeCrl()
