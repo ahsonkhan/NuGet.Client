@@ -114,13 +114,13 @@ namespace NuGet.Packaging.Test
                 {
                     AssertNotTimeValid(logger.LogMessages, LogLevel.Error);
                 }
-                else if (RuntimeEnvironmentHelper.IsMacOSX)
+                else 
                 {
                     AssertExpiredCertificate(logger.LogMessages, LogLevel.Error);
                 }
-                else
+
+                if (RuntimeEnvironmentHelper.IsLinux)
                 {
-                    AssertPartialChain(logger.LogMessages, LogLevel.Error);
                     SigningTestUtility.AssertOfflineRevocation(logger.LogMessages, LogLevel.Warning);
                 }
             }
@@ -533,13 +533,13 @@ namespace NuGet.Packaging.Test
                 {
                     AssertNotTimeValid(test.Logger.LogMessages, LogLevel.Error);
                 }
-                else if (RuntimeEnvironmentHelper.IsMacOSX)
+                else
                 {
                     AssertExpiredCertificate(test.Logger.LogMessages, LogLevel.Error);
                 }
-                else
+
+                if (RuntimeEnvironmentHelper.IsLinux)
                 {
-                    AssertPartialChain(test.Logger.LogMessages, LogLevel.Error);
                     SigningTestUtility.AssertOfflineRevocation(test.Logger.LogMessages, LogLevel.Warning);
                 }
             }
@@ -716,10 +716,20 @@ namespace NuGet.Packaging.Test
 
         private static void AssertExpiredCertificate(IEnumerable<ILogMessage> issues, LogLevel logLevel)
         {
+            string expiredCertificate;
+            if (RuntimeEnvironmentHelper.IsMacOSX)
+            {
+                expiredCertificate = "An expired certificate was detected";
+            }
+            else
+            {
+                expiredCertificate = "certificate has expired";
+            }
+
             Assert.Contains(issues, issue =>
                 issue.Code == NuGetLogCode.NU3018 &&
                 issue.Level == logLevel &&
-                issue.Message.Contains("An expired certificate was detected"));
+                issue.Message.Contains(expiredCertificate));
         }
 
         private static void AssertPartialChain(IEnumerable<ILogMessage> issues, LogLevel logLevel)

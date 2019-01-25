@@ -53,8 +53,12 @@ namespace NuGet.Packaging.FuncTest
                 Assert.Equal(SignatureVerificationStatus.Disallowed, result.Status);
                 Assert.Equal(RuntimeEnvironmentHelper.IsLinux ? 2 : 1, result.Issues.Count(issue => issue.Level == LogLevel.Error));
 
-                AssertUntrustedRoot(result.Issues, LogLevel.Error);
-                SigningTestUtility.AssertOfflineRevocation(result.Issues, LogLevel.Error);
+                SigningTestUtility.AssertUntrustedRoot(result.Issues, LogLevel.Error);
+
+                if (RuntimeEnvironmentHelper.IsLinux)
+                {
+                    SigningTestUtility.AssertOfflineRevocation(result.Issues, LogLevel.Error);
+                }
             }
         }
 
@@ -135,14 +139,6 @@ namespace NuGet.Packaging.FuncTest
                 Assert.Equal(sha384, expectedSha384, StringComparer.Ordinal);
                 Assert.Equal(sha512, expectedSha512, StringComparer.Ordinal);
             }
-        }
-
-        private static void AssertUntrustedRoot(IEnumerable<SignatureLog> issues, LogLevel logLevel)
-        {
-            Assert.Contains(issues, issue =>
-                issue.Code == NuGetLogCode.NU3018 &&
-                issue.Level == logLevel &&
-                issue.Message.Contains("The primary signature found a chain building issue: A certificate chain processed, but terminated in a root certificate which is not trusted by the trust provider"));
         }
 
         private sealed class VerifyTest : IDisposable
