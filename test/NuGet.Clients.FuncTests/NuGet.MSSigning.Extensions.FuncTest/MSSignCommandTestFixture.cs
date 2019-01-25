@@ -47,19 +47,7 @@ namespace NuGet.MSSigning.Extensions.FuncTest.Commands
                     // Code Sign EKU needs trust to a root authority
                     // Add the cert to Root CA list in LocalMachine as it does not prompt a dialog
                     // This makes all the associated tests to require admin privilege
-                    var testCert = TestCertificate.Generate(actionGenerator);
-                    if (RuntimeEnvironmentHelper.IsWindows)
-                    {
-                        _trustedTestCertWithPrivateKey = testCert.WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.LocalMachine, _certDir);
-                    }
-                    else if (RuntimeEnvironmentHelper.IsLinux)
-                    {
-                        _trustedTestCertWithPrivateKey = testCert.WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.CurrentUser, _certDir, trustInLinux: true);
-                    }
-                    else
-                    {
-                        _trustedTestCertWithPrivateKey = testCert.WithPrivateKeyAndTrust(StoreName.My, StoreLocation.CurrentUser, _certDir, trustInMac: true);
-                    }
+                    _trustedTestCertWithPrivateKey = TestCertificate.Generate(actionGenerator).WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.LocalMachine, _certDir);
                 }
 
                 return _trustedTestCertWithPrivateKey;
@@ -77,19 +65,8 @@ namespace NuGet.MSSigning.Extensions.FuncTest.Commands
                     // Code Sign EKU needs trust to a root authority
                     // Add the cert to Root CA list in LocalMachine as it does not prompt a dialog
                     // This makes all the associated tests to require admin privilege
-                    var testCert = TestCertificate.Generate(actionGenerator);
-                    if (RuntimeEnvironmentHelper.IsWindows)
-                    {
-                        _trustedTestCertWithoutPrivateKey = testCert.WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.LocalMachine, _certDir);
-                    }
-                    else if (RuntimeEnvironmentHelper.IsLinux)
-                    {
-                        _trustedTestCertWithoutPrivateKey = testCert.WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.CurrentUser, _certDir, trustInLinux: true);
-                    }
-                    else
-                    {
-                        _trustedTestCertWithoutPrivateKey = testCert.WithPrivateKeyAndTrust(StoreName.My, StoreLocation.CurrentUser, _certDir, trustInMac: true);
-                    }
+                    _trustedTestCertWithoutPrivateKey = TestCertificate.Generate(actionGenerator).WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.LocalMachine, _certDir);
+
                 }
 
                 return _trustedTestCertWithoutPrivateKey;
@@ -126,32 +103,11 @@ namespace NuGet.MSSigning.Extensions.FuncTest.Commands
             var intermediateCa = rootCa.CreateIntermediateCertificateAuthority();
             var rootCertificate = new X509Certificate2(rootCa.Certificate.RawData);
 
-            if (RuntimeEnvironmentHelper.IsWindows)
-            {
-                _trustedTimestampRoot = TrustedTestCert.Create(
-                    rootCertificate,
-                    StoreName.Root,
-                    StoreLocation.LocalMachine,
-                    _certDir);
-            }
-            else if (RuntimeEnvironmentHelper.IsLinux)
-            {
-                _trustedTimestampRoot = TrustedTestCert.Create(
-                    rootCertificate,
-                    StoreName.Root,
-                    StoreLocation.CurrentUser,
-                    _certDir,
-                    trustInLinux: true);
-            }
-            else
-            {
-                _trustedTimestampRoot = TrustedTestCert.Create(
-                    rootCertificate,
-                    StoreName.My,
-                    StoreLocation.CurrentUser,
-                    _certDir,
-                    trustInMac: true);
-            }
+            _trustedTimestampRoot = TrustedTestCert.Create(
+                rootCertificate,
+                StoreName.Root,
+                StoreLocation.LocalMachine,
+                _certDir);
 
             var ca = intermediateCa;
 

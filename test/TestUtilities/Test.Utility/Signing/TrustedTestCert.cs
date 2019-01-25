@@ -7,8 +7,6 @@ using System.IO;
 using System.Security.Cryptography.X509Certificates;
 using NuGet.Common;
 using NuGet.Test.Utility;
-using Org.BouncyCastle.OpenSsl;
-using Org.BouncyCastle.Security;
 
 namespace Test.Utility.Signing
 {
@@ -19,9 +17,7 @@ namespace Test.Utility.Signing
             StoreName storeName,
             StoreLocation storeLocation,
             TestDirectory dir,
-            TimeSpan? maximumValidityPeriod = null,
-            bool trustInLinux = false,
-            bool trustInMac = false)
+            TimeSpan? maximumValidityPeriod = null)
         {
             return new TrustedTestCert<X509Certificate2>(
                 cert,
@@ -29,9 +25,7 @@ namespace Test.Utility.Signing
                 storeName,
                 storeLocation,
                 dir,
-                maximumValidityPeriod,
-                trustInLinux,
-                trustInMac);
+                maximumValidityPeriod);
         }
     }
 
@@ -54,16 +48,12 @@ namespace Test.Utility.Signing
 
         private string _systemTrustedCertPath;
 
-        private readonly bool _trustedInMac;
-
         public TrustedTestCert(T source,
             Func<T, X509Certificate2> getCert,
             StoreName storeName,
             StoreLocation storeLocation,
             TestDirectory dir,
-            TimeSpan? maximumValidityPeriod = null,
-            bool trustInLinux = false,
-            bool trustInMac = false)
+            TimeSpan? maximumValidityPeriod = null)
         {
             Source = source;
             TrustedCert = getCert(source);
@@ -78,21 +68,42 @@ namespace Test.Utility.Signing
                 throw new InvalidOperationException($"The certificate used is valid for more than {maximumValidityPeriod}.");
             }
 
-            StoreName = storeName;
-            StoreLocation = storeLocation;
+            StoreName = GetPlatformSpecificStoreName(storeName, dir);
+            StoreLocation = GetPlatformSpecificStoreLocation(storeLocation);
             AddCertificateToStore();
 
-            if (trustInLinux && RuntimeEnvironmentHelper.IsLinux)
+            ExportCrl();
+        }
+
+        private StoreLocation GetPlatformSpecificStoreLocation(StoreLocation requestedLocation)
+        {
+            if (requestedLocation == StoreLocation.LocalMachine &&
+                (RuntimeEnvironmentHelper.IsMacOSX || RuntimeEnvironmentHelper.IsLinux))
             {
-                TrustCertInLinux(dir);
-            }
-            else if (trustInMac && RuntimeEnvironmentHelper.IsMacOSX)
-            {
-                _trustedInMac = true;
-                TrustCertInMac(dir);
+                return StoreLocation.CurrentUser;
             }
 
-            ExportCrl();
+            return requestedLocation;
+        }
+
+        private StoreName GetPlatformSpecificStoreName(StoreName requestedStoreName, TestDirectory dir)
+        {
+            if (RuntimeEnvironmentHelper.IsMacOSX)
+            {
+                if (requestedStoreName == StoreName.Root || requestedStoreName == StoreName.CertificateAuthority)
+                {
+                    TrustCertInMac(dir);
+                }
+
+                return StoreName.My;
+            }
+
+            if (requestedStoreName == StoreName.CertificateAuthority && RuntimeEnvironmentHelper.IsLinux)
+            {
+                return StoreName.Root;
+            }
+
+            return requestedStoreName;
         }
 
         private void AddCertificateToStore()
@@ -110,27 +121,6 @@ namespace Test.Utility.Signing
             {
                 testCertificate.Crl.ExportCrl();
             }
-        }
-
-        private void TrustCertInLinux(TestDirectory dir)
-        {
-            var certDir = @"/usr/local/share/ca-certificates";
-
-            var tempCertFileName = GetCertificateName() + ".crt";
-            var tempCertPath = Path.Combine(dir, tempCertFileName);
-
-            var bcCert = DotNetUtilities.FromX509Certificate(TrustedCert);
-            var pemWriter = new PemWriter(new StreamWriter(File.Open(tempCertPath, FileMode.Create)));
-            pemWriter.WriteObject(bcCert);
-            pemWriter.Writer.Flush();
-            pemWriter.Writer.Close();
-
-            _systemTrustedCertPath = Path.Combine(certDir, tempCertFileName);
-
-            var copyProcess = Process.Start(@"/usr/bin/sudo", $@"cp {tempCertPath} {_systemTrustedCertPath}");
-            copyProcess.WaitForExit();
-            var updateProcess = Process.Start(@"/usr/bin/sudo", @"update-ca-certificates");
-            updateProcess.WaitForExit();
         }
 
         private void TrustCertInMac(TestDirectory dir)
@@ -180,16 +170,7 @@ namespace Test.Utility.Signing
                     _store.Remove(TrustedCert);
                 }
 
-                if (_systemTrustedCertPath != null && RuntimeEnvironmentHelper.IsLinux)
-                {
-                    var rmProcess = Process.Start(@"/usr/bin/sudo", $@"rm {_systemTrustedCertPath}");
-                    rmProcess.WaitForExit();
-                    var updateProcess = Process.Start(@"/usr/bin/sudo", @"update-ca-certificates");
-                    updateProcess.WaitForExit();
-
-                }
-
-                if (_trustedInMac && RuntimeEnvironmentHelper.IsMacOSX)
+                if (_systemTrustedCertPath != null && RuntimeEnvironmentHelper.IsMacOSX)
                 {
                     var untrustProcess = Process.Start(@"/usr/bin/sudo", $@"security -v remove-trusted-cert -d {_systemTrustedCertPath}");
                     untrustProcess.WaitForExit();

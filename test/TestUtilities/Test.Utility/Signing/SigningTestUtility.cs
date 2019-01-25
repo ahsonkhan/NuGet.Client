@@ -138,19 +138,7 @@ namespace Test.Utility.Signing
                         IsCA = true
                     };
 
-                    var temp = TestCertificate.Generate(actionGenerator, chainCertificateRequest);
-                    if (RuntimeEnvironmentHelper.IsWindows)
-                    {
-                        cert = temp.WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.LocalMachine, dir);
-                    }
-                    else if (RuntimeEnvironmentHelper.IsLinux)
-                    {
-                        cert = temp.WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.CurrentUser, dir, trustInLinux: true);
-                    }
-                    else
-                    {
-                        cert = temp.WithPrivateKeyAndTrust(StoreName.My, StoreLocation.CurrentUser, dir, trustInMac: true);
-                    }
+                    cert = TestCertificate.Generate(actionGenerator, chainCertificateRequest).WithPrivateKeyAndTrust(StoreName.Root, StoreLocation.LocalMachine, dir);
                     issuer = cert;
                 }
                 else if (i < length - 1) // intermediate CA cert
@@ -163,19 +151,7 @@ namespace Test.Utility.Signing
                         Issuer = issuer.Source.Cert
                     };
 
-                    var temp = TestCertificate.Generate(actionGenerator, chainCertificateRequest);
-                    if (RuntimeEnvironmentHelper.IsWindows)
-                    {
-                        cert = temp.WithPrivateKeyAndTrust(StoreName.CertificateAuthority, StoreLocation.LocalMachine, dir);
-                    }
-                    else if (RuntimeEnvironmentHelper.IsLinux)
-                    {
-                        cert = temp.WithPrivateKeyAndTrust(StoreName.CertificateAuthority, StoreLocation.CurrentUser, dir, trustInLinux: true);
-                    }
-                    else
-                    {
-                        cert = temp.WithPrivateKeyAndTrust(StoreName.My, StoreLocation.CurrentUser, dir, trustInMac: true);
-                    }
+                    cert = TestCertificate.Generate(actionGenerator, chainCertificateRequest).WithPrivateKeyAndTrust(StoreName.CertificateAuthority, StoreLocation.LocalMachine, dir);
                     issuer = cert;
                 }
                 else // leaf cert
@@ -189,15 +165,7 @@ namespace Test.Utility.Signing
                         Issuer = issuer.Source.Cert
                     };
 
-                    var temp = TestCertificate.Generate(actionGenerator, chainCertificateRequest);
-                    if (RuntimeEnvironmentHelper.IsWindows)
-                    {
-                        cert = temp.WithPrivateKeyAndTrust(StoreName.My, StoreLocation.LocalMachine, dir);
-                    }
-                    else
-                    {
-                        cert = temp.WithPrivateKeyAndTrust(StoreName.My, StoreLocation.CurrentUser, dir);
-                    }
+                    cert = TestCertificate.Generate(actionGenerator, chainCertificateRequest).WithPrivateKeyAndTrust(StoreName.My, StoreLocation.LocalMachine, dir);
                 }
 
                 certChain.Add(cert);
@@ -310,22 +278,25 @@ namespace Test.Utility.Signing
             certGen.Extensions.Add(
                 new X509SubjectKeyIdentifierExtension(request.PublicKey, critical: false));
 
-            if (!isSelfSigned | isCA)
+            if (isSelfSigned)
             {
-                certGen.Extensions.Add(
-                  new X509Extension(
-                      Oids.AuthorityKeyIdentifier,
-                      new AuthorityKeyIdentifierStructure(issuerPublicKey).GetEncoded(),
-                      critical: false));
+                issuerPublicKey = DotNetUtilities.GetRsaPublicKey(rsa);
+                keyUsage |= X509KeyUsageFlags.KeyCertSign;
+            }
 
-                if (isCA)
-                {
-                    // The RFC 5280 states that If the cA boolean is not asserted,
-                    // then the keyCertSign bit in the key usage extension MUST NOT be
-                    // asserted.
-                    certGen.Extensions.Add(
-                        new X509BasicConstraintsExtension(certificateAuthority: true, hasPathLengthConstraint: false, pathLengthConstraint: 0, critical: true));
-                }
+            certGen.Extensions.Add(
+                new X509Extension(
+                    Oids.AuthorityKeyIdentifier,
+                    new AuthorityKeyIdentifierStructure(issuerPublicKey).GetEncoded(),
+                    critical: false));
+
+            if (isCA)
+            {
+                // The RFC 5280 states that If the cA boolean is not asserted,
+                // then the keyCertSign bit in the key usage extension MUST NOT be
+                // asserted.
+                certGen.Extensions.Add(
+                    new X509BasicConstraintsExtension(certificateAuthority: true, hasPathLengthConstraint: false, pathLengthConstraint: 0, critical: true));
             }
 
             certGen.Extensions.Add(
@@ -423,14 +394,14 @@ namespace Test.Utility.Signing
             var hashAlgorithm = System.Security.Cryptography.HashAlgorithmName.SHA256;
             var request = new CertificateRequest(subjectDN, algorithm, hashAlgorithm, RSASignaturePadding.Pkcs1);
 
-            var keyUsages = X509KeyUsageFlags.DigitalSignature;
+            var keyUsages = X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyCertSign;
 
             request.CertificateExtensions.Add(
                 new X509SubjectKeyIdentifierExtension(request.PublicKey, critical: false));
 
             if (isCa)
             {
-                keyUsages |= X509KeyUsageFlags.KeyCertSign | X509KeyUsageFlags.CrlSign;
+                keyUsages |= X509KeyUsageFlags.CrlSign;
 
                 var publicKey = DotNetUtilities.GetRsaPublicKey(algorithm);
 
@@ -532,19 +503,7 @@ namespace Test.Utility.Signing
             // Code Sign EKU needs trust to a root authority
             // Add the cert to Root CA list in LocalMachine as it does not prompt a dialog
             // This makes all the associated tests to require admin privilege
-            var testCert = TestCertificate.Generate(actionGenerator);
-            if (RuntimeEnvironmentHelper.IsWindows)
-            {
-                return testCert.WithTrust(StoreName.Root, StoreLocation.LocalMachine, certDir);
-            }
-            else if (RuntimeEnvironmentHelper.IsLinux)
-            {
-                return testCert.WithTrust(StoreName.Root, StoreLocation.CurrentUser, certDir, trustInLinux: true);
-            }
-            else
-            {
-                return testCert.WithTrust(StoreName.My, StoreLocation.CurrentUser, certDir, trustInMac: true);
-            }
+            return TestCertificate.Generate(actionGenerator).WithTrust(StoreName.Root, StoreLocation.LocalMachine, certDir);
         }
 
         public static TrustedTestCert<TestCertificate> GenerateTrustedTestCertificateExpired(TestDirectory certDir)
@@ -554,19 +513,7 @@ namespace Test.Utility.Signing
             // Code Sign EKU needs trust to a root authority
             // Add the cert to Root CA list in LocalMachine as it does not prompt a dialog
             // This makes all the associated tests to require admin privilege
-            var testCert = TestCertificate.Generate(actionGenerator);
-            if (RuntimeEnvironmentHelper.IsWindows)
-            {
-                return testCert.WithTrust(StoreName.Root, StoreLocation.LocalMachine, certDir);
-            }
-            else if (RuntimeEnvironmentHelper.IsLinux)
-            {
-                return testCert.WithTrust(StoreName.Root, StoreLocation.CurrentUser, certDir, trustInLinux: true);
-            }
-            else
-            {
-                return testCert.WithTrust(StoreName.My, StoreLocation.CurrentUser, certDir, trustInMac: true);
-            }
+            return TestCertificate.Generate(actionGenerator).WithTrust(StoreName.Root, StoreLocation.LocalMachine, certDir);
         }
 
         public static TrustedTestCert<TestCertificate> GenerateTrustedTestCertificateNotYetValid(TestDirectory certDir)
@@ -576,19 +523,7 @@ namespace Test.Utility.Signing
             // Code Sign EKU needs trust to a root authority
             // Add the cert to Root CA list in LocalMachine as it does not prompt a dialog
             // This makes all the associated tests to require admin privilege
-            var testCert = TestCertificate.Generate(actionGenerator);
-            if (RuntimeEnvironmentHelper.IsWindows)
-            {
-                return testCert.WithTrust(StoreName.Root, StoreLocation.LocalMachine, certDir);
-            }
-            else if (RuntimeEnvironmentHelper.IsLinux)
-            {
-                return testCert.WithTrust(StoreName.Root, StoreLocation.CurrentUser, certDir, trustInLinux: true);
-            }
-            else
-            {
-                return testCert.WithTrust(StoreName.My, StoreLocation.CurrentUser, certDir, trustInMac: true);
-            }
+            return TestCertificate.Generate(actionGenerator).WithTrust(StoreName.Root, StoreLocation.LocalMachine, certDir);
         }
 
         public static TrustedTestCert<TestCertificate> GenerateTrustedTestCertificateThatExpiresIn10Seconds(TestDirectory certDir)
@@ -598,19 +533,7 @@ namespace Test.Utility.Signing
             // Code Sign EKU needs trust to a root authority
             // Add the cert to Root CA list in LocalMachine as it does not prompt a dialog
             // This makes all the associated tests to require admin privilege
-            var testCert = TestCertificate.Generate(actionGenerator);
-            if (RuntimeEnvironmentHelper.IsWindows)
-            {
-                return testCert.WithTrust(StoreName.Root, StoreLocation.LocalMachine, certDir);
-            }
-            else if (RuntimeEnvironmentHelper.IsLinux)
-            {
-                return testCert.WithTrust(StoreName.Root, StoreLocation.CurrentUser, certDir, trustInLinux: true);
-            }
-            else
-            {
-                return testCert.WithTrust(StoreName.My, StoreLocation.CurrentUser, certDir, trustInMac: true);
-            }
+            return TestCertificate.Generate(actionGenerator).WithTrust(StoreName.Root, StoreLocation.LocalMachine, certDir);
         }
 
         public static bool AreVerifierSettingsEqual(SignedPackageVerifierSettings first, SignedPackageVerifierSettings second)

@@ -3155,35 +3155,12 @@ namespace NuGet.Packaging.FuncTest
         {
             var rootCertificate = certificateChain.Last();
 
-            if (RuntimeEnvironmentHelper.IsWindows)
-            {
-                return TrustedTestCert.Create(
-                    new X509Certificate2(rootCertificate),
-                    StoreName.Root,
-                    StoreLocation.LocalMachine,
-                    certDir,
-                    maximumValidityPeriod: TimeSpan.MaxValue);
-            }
-            else if (RuntimeEnvironmentHelper.IsLinux)
-            {
-                return TrustedTestCert.Create(
-                    new X509Certificate2(rootCertificate),
-                    StoreName.Root,
-                    StoreLocation.CurrentUser,
-                    certDir,
-                    maximumValidityPeriod: TimeSpan.MaxValue,
-                    trustInLinux: true);
-            }
-            else
-            {
-                return TrustedTestCert.Create(
-                    new X509Certificate2(rootCertificate),
-                    StoreName.My,
-                    StoreLocation.CurrentUser,
-                    certDir,
-                    maximumValidityPeriod: TimeSpan.MaxValue,
-                    trustInMac: true);
-            }
+            return TrustedTestCert.Create(
+                new X509Certificate2(rootCertificate),
+                StoreName.Root,
+                StoreLocation.LocalMachine,
+                certDir,
+                maximumValidityPeriod: TimeSpan.MaxValue);
         }
     }
 }

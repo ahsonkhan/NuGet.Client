@@ -116,26 +116,8 @@ namespace NuGet.Packaging.FuncTest
                         var certificate1 = SigningTestUtility.GenerateSelfIssuedCertificate(rsa, certificateName);
                         var certificate2 = SigningTestUtility.GenerateSelfIssuedCertificate(rsa, certificateName);
 
-                        var temp1 = new TestCertificate() { Cert = certificate1 };
-                        var temp2 = new TestCertificate() { Cert = certificate2 };
-                        
-                        TrustedTestCert<TestCertificate> testCertificate1 = null;
-                        TrustedTestCert<TestCertificate> testCertificate2 = null;
-                        if (RuntimeEnvironmentHelper.IsWindows)
-                        {
-                            testCertificate1 = temp1.WithTrust(StoreName.Root, StoreLocation.LocalMachine, _certDir);
-                            testCertificate2 = temp2.WithTrust(StoreName.Root, StoreLocation.LocalMachine, _certDir);
-                        }
-                        else if (RuntimeEnvironmentHelper.IsLinux)
-                        {
-                            testCertificate1 = temp1.WithTrust(StoreName.Root, StoreLocation.CurrentUser, _certDir, trustInLinux: true);
-                            testCertificate2 = temp2.WithTrust(StoreName.Root, StoreLocation.CurrentUser, _certDir, trustInLinux: true);
-                        }
-                        else
-                        {
-                            testCertificate1 = temp1.WithTrust(StoreName.My, StoreLocation.CurrentUser, _certDir, trustInMac: true);
-                            testCertificate2 = temp2.WithTrust(StoreName.My, StoreLocation.CurrentUser, _certDir, trustInMac: true);
-                        }
+                        var testCertificate1 = new TestCertificate() { Cert = certificate1 }.WithTrust(StoreName.Root, StoreLocation.LocalMachine, _certDir);
+                        var testCertificate2 = new TestCertificate() { Cert = certificate2 }.WithTrust(StoreName.Root, StoreLocation.LocalMachine, _certDir);
 
                         _trustedTestCertificateWithReissuedCertificate = new[]
                         {
@@ -214,32 +196,11 @@ namespace NuGet.Packaging.FuncTest
             var intermediateCa = rootCa.CreateIntermediateCertificateAuthority();
             var rootCertificate = new X509Certificate2(rootCa.Certificate);
 
-            if (RuntimeEnvironmentHelper.IsWindows)
-            {
-                _trustedServerRoot = TrustedTestCert.Create(
-                    rootCertificate,
-                    StoreName.Root,
-                    StoreLocation.LocalMachine,
-                    _certDir);
-            }
-            else if (RuntimeEnvironmentHelper.IsLinux)
-            {
-                _trustedServerRoot = TrustedTestCert.Create(
-                    rootCertificate,
-                    StoreName.Root,
-                    StoreLocation.CurrentUser,
-                    _certDir,
-                    trustInLinux: true);
-            }
-            else
-            {
-                _trustedServerRoot = TrustedTestCert.Create(
-                    rootCertificate,
-                    StoreName.My,
-                    StoreLocation.CurrentUser,
-                    _certDir,
-                    trustInMac: true);
-            }
+            _trustedServerRoot = TrustedTestCert.Create(
+                rootCertificate,
+                StoreName.Root,
+                StoreLocation.LocalMachine,
+                _certDir);
 
             var ca = intermediateCa;
 

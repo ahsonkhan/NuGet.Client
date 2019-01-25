@@ -92,32 +92,11 @@ namespace NuGet.Packaging.FuncTest
 
             var rootCertificate = new X509Certificate2(rootCa.Certificate);
 
-            var storeName = StoreName.Root;
-            var storeLocation = StoreLocation.CurrentUser;
-            var trustInLinux = false;
-            var trustInMac = false;
-
-            if (RuntimeEnvironmentHelper.IsWindows)
-            {
-                storeLocation = StoreLocation.LocalMachine;
-            }
-            else if (RuntimeEnvironmentHelper.IsLinux)
-            {
-                trustInLinux = true;
-            }
-            else
-            {
-                storeName = StoreName.My;
-                trustInMac = true;
-            }
-
             using (var trustedServerRoot = TrustedTestCert.Create(
                 rootCertificate,
-                storeName,
-                storeLocation,
-                dir,
-                trustInLinux: trustInLinux,
-                trustInMac: trustInMac))
+                StoreName.Root,
+                StoreLocation.LocalMachine,
+                dir))
             {
                 var ca = intermediateCa;
 

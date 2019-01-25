@@ -37,18 +37,18 @@ namespace Test.Utility.Signing
         /// Trust the PublicCert cert for the life of the object.
         /// </summary>
         /// <remarks>Dispose of the object returned!</remarks>
-        public TrustedTestCert<TestCertificate> WithTrust(StoreName storeName, StoreLocation storeLocation, TestDirectory dir, bool trustInLinux = false, bool trustInMac = false)
+        public TrustedTestCert<TestCertificate> WithTrust(StoreName storeName, StoreLocation storeLocation, TestDirectory dir)
         {
-            return new TrustedTestCert<TestCertificate>(this, e => PublicCert, storeName, storeLocation, dir, trustInLinux: trustInLinux, trustInMac: trustInMac);
+            return new TrustedTestCert<TestCertificate>(this, e => PublicCert, storeName, storeLocation, dir);
         }
 
         /// <summary>
         /// Trust the PublicCert cert for the life of the object.
         /// </summary>
         /// <remarks>Dispose of the object returned!</remarks>
-        public TrustedTestCert<TestCertificate> WithPrivateKeyAndTrust(StoreName storeName, StoreLocation storeLocation, TestDirectory dir, bool trustInLinux = false, bool trustInMac = false)
+        public TrustedTestCert<TestCertificate> WithPrivateKeyAndTrust(StoreName storeName, StoreLocation storeLocation, TestDirectory dir)
         {
-            return new TrustedTestCert<TestCertificate>(this, e => PublicCertWithPrivateKey, storeName, storeLocation, dir, trustInLinux: trustInLinux, trustInMac: trustInMac);
+            return new TrustedTestCert<TestCertificate>(this, e => PublicCertWithPrivateKey, storeName, storeLocation, dir);
         }
 
         public static string GenerateCertificateName()
