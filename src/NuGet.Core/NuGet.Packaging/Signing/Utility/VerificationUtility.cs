@@ -159,7 +159,7 @@ namespace NuGet.Packaging.Signing
                         validationFlags |= SignatureVerificationStatusFlags.IntegrityCheckFailed;
                     }
                 }
-                catch
+                catch (ArgumentException)
                 {
                     // If the hash algorithm is not supported OidToHashAlgorithmName will throw
                     issues.Add(SignatureLog.Issue(treatIssuesAsErrors, NuGetLogCode.NU3030, string.Format(CultureInfo.CurrentCulture, Strings.VerifyError_TimestampMessageImprintUnsupportedHashAlgorithm, signature.FriendlyName)));

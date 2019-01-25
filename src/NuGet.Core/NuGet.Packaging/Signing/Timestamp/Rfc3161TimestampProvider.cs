@@ -67,7 +67,7 @@ namespace NuGet.Packaging.Signing
         /// </summary>
         public Task<PrimarySignature> TimestampSignatureAsync(PrimarySignature primarySignature, TimestampRequest timestampRequest, ILogger logger, CancellationToken token)
         {
-            throw new NotImplementedException();
+            throw new PlatformNotSupportedException();
         }
 #endif
 
@@ -130,6 +130,7 @@ namespace NuGet.Packaging.Signing
             SignedCms timestampCms,
             IReadOnlyList<X509Certificate2> chain)
         {
+#if IS_DESKTOP
             using (var timestampNativeCms = NativeCms.Decode(timestampCms.Encode()))
             {
                 timestampNativeCms.AddCertificates(
@@ -143,6 +144,9 @@ namespace NuGet.Packaging.Signing
 
                 return updatedCms;
             }
+#else
+            throw new PlatformNotSupportedException();
+#endif
         }
 
         private static void ValidateTimestampCms(SigningSpecifications spec, SignedCms timestampCms, Rfc3161TimestampToken timestampToken)
