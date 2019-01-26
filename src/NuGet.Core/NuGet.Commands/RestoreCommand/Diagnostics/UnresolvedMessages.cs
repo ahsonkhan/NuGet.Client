@@ -25,14 +25,9 @@ namespace NuGet.Commands
         /// <summary>
         /// Log errors for missing dependencies.
         /// </summary>
-        public static async Task LogAsync(
-            IEnumerable<IRestoreTargetGraph> graphs,
-            IList<IRemoteDependencyProvider> remoteLibraryProviders,
-            SourceCacheContext sourceCacheContext,
-            ILogger logger,
-            CancellationToken token)
+        public static async Task LogAsync(IEnumerable<IRestoreTargetGraph> graphs, RemoteWalkContext context, ILogger logger, CancellationToken token)
         {
-            var tasks = graphs.SelectMany(graph => graph.Unresolved.Select(e => GetMessageAsync(graph.TargetGraphName, e, remoteLibraryProviders, sourceCacheContext, logger, token))).ToArray();
+            var tasks = graphs.SelectMany(graph => graph.Unresolved.Select(e => GetMessageAsync(graph.TargetGraphName, e, context.RemoteLibraryProviders, context.CacheContext, logger, token))).ToArray();
             var messages = await Task.WhenAll(tasks);
 
             await logger.LogMessagesAsync(DiagnosticUtility.MergeOnTargetGraph(messages));
@@ -47,7 +42,7 @@ namespace NuGet.Commands
             {
                 foreach (var unresolved in ddi.Unresolved)
                 {
-                    messageTasks.Add(UnresolvedMessages.GetMessageAsync(
+                    messageTasks.Add(GetMessageAsync(
                         ddi.Framework.ToString(),
                         unresolved,
                         remoteLibraryProviders, sourceCacheContext,

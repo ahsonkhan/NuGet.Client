@@ -15,7 +15,6 @@ using NuGet.LibraryModel;
 using NuGet.Packaging;
 using NuGet.Packaging.Core;
 using NuGet.Packaging.Signing;
-using NuGet.Protocol.Core.Types;
 using NuGet.Repositories;
 using NuGet.RuntimeModel;
 
@@ -76,23 +75,23 @@ namespace NuGet.Commands
 
             telemetryActivity.StartIntervalMeasure();
 
-            var downloadDependencyResolutionResults = new List<Task<DownloadDependencyResolutionResult>>();
-
+            var downloadDependencyResolutionTasks = new List<Task<DownloadDependencyResolutionResult>>();
+            var ddLibraryRangeToRemoteMatchCache = new ConcurrentDictionary<LibraryRange, Task<Tuple<LibraryRange, RemoteMatch>>>();
             foreach (var targetFrameworkInformation in _request.Project.TargetFrameworks)
             {
-                downloadDependencyResolutionResults.Add(ResolveDownloadDependencies(
+                downloadDependencyResolutionTasks.Add(ResolveDownloadDependencies(
                     context,
-                    new ConcurrentDictionary<LibraryRange, Task<Tuple<LibraryRange, RemoteMatch>>>(),
+                    ddLibraryRangeToRemoteMatchCache,
                     targetFrameworkInformation,
                     token));
             }
 
-            var downloadDependencyInformations = await Task.WhenAll(downloadDependencyResolutionResults);
+            var downloadDependencyResolutionResults = await Task.WhenAll(downloadDependencyResolutionTasks);
             
             telemetryActivity.EndIntervalMeasure(EvaluateDownloadDependenciesDuration);
 
             success &= await InstallPackagesAsync(graphs,
-                downloadDependencyInformations,
+                downloadDependencyResolutionResults,
                 userPackageFolder,
                 token);
 
@@ -157,7 +156,7 @@ namespace NuGet.Commands
             // TODO https://github.com/NuGet/Home/issues/7709: When ranges are implemented for download dependencies the bumped up dependencies need to be handled.
             await UnexpectedDependencyMessages.LogAsync(graphs, _request.Project, _logger);
 
-            success &= (await ResolutionSucceeded(graphs, downloadDependencyInformations, context, token));
+            success &= (await ResolutionSucceeded(graphs, downloadDependencyResolutionResults, context, token));
 
             return Tuple.Create(success, graphs, allRuntimes);
         }
@@ -244,7 +243,7 @@ namespace NuGet.Commands
             if (!graphSuccess)
             {
                 // Log message for any unresolved dependencies
-                await UnresolvedMessages.LogAsync(graphs, context.RemoteLibraryProviders, context.CacheContext, context.Logger, token);
+                await UnresolvedMessages.LogAsync(graphs, context, context.Logger, token);
             }
 
             var ddSuccess = downloadDependencyResults.All(e => e.Unresolved.Count == 0);
