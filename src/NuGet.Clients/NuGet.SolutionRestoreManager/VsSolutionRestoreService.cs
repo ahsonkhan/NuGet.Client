@@ -113,7 +113,7 @@ namespace NuGet.SolutionRestoreManager
 
                 var dgSpec = projectRestoreInfo != null ?
                     ToDependencyGraphSpec(projectNames, projectRestoreInfo) :
-                    null; // TODO NK - Implement the ToDependencyGraphSpec for IVSProjectRestoreInfo2
+                    null; // TODO NK - Implement the ToDependencyGraphSpec for IVSProjectRestoreInfo2. Should they be inheriting from one another
 
                 _projectSystemCache.AddProjectRestoreInfo(projectNames, dgSpec);
 
