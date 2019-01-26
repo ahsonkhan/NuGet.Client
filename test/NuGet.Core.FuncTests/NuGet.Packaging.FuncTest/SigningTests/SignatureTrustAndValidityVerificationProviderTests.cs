@@ -1407,7 +1407,7 @@ namespace NuGet.Packaging.FuncTest
                 SigningTestUtility.AssertUntrustedRoot(status.Issues, Common.LogLevel.Warning);
             }
         }
-
+#if IS_DESKTOP
         [CIOnlyFact]
         public async Task GetTrustResultAsync_WithUnavailableRevocationInformationInAcceptMode_DoesNotWarnAsync()
         {
@@ -1600,7 +1600,7 @@ namespace NuGet.Packaging.FuncTest
                 errorIssues.First().Message.Should().Contain("signature's timestamp's generalized time is outside the timestamping certificate's validity period.");
             }
         }
-
+#endif
         [Collection(SigningTestCollection.Name)]
         public class AuthorPrimarySignatures
         {

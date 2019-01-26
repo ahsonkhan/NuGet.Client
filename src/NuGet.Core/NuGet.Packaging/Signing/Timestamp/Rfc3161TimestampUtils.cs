@@ -71,21 +71,6 @@ namespace NuGet.Packaging.Signing
             return allowPeriod;
         }
 
-        public static byte[] GetSignature(this SignerInfo signerInfo)
-        {
-            var field = typeof(SignerInfo).GetField("m_pbCmsgSignerInfo", BindingFlags.Instance | BindingFlags.NonPublic);
-            var pbCmsgSignerInfo = (SafeHandle)field.GetValue(signerInfo);
-
-            byte[] ret;
-            unsafe
-            {
-                var ptr = (CMSG_SIGNER_INFO*)pbCmsgSignerInfo.DangerousGetHandle();
-                ret = new byte[ptr->EncryptedHash.cbData];
-                Marshal.Copy(ptr->EncryptedHash.pbData, ret, 0, ret.Length);
-                return ret;
-            }
-        }
-
         internal static string ByteArrayToHex(this byte[] bytes)
         {
             if (bytes == null)

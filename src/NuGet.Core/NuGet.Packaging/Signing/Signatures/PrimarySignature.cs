@@ -103,10 +103,7 @@ namespace NuGet.Packaging.Signing
         public override byte[] GetSignatureValue()
         {
 #if IS_DESKTOP
-            using (var nativeCms = NativeCms.Decode(SignedCms.Encode()))
-            {
-                return nativeCms.GetPrimarySignatureSignatureValue();
-            }
+            return SignerInfo.GetSignature();
 #else
             throw new PlatformNotSupportedException();
 #endif

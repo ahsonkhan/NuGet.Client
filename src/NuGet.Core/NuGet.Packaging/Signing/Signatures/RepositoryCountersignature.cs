@@ -76,10 +76,7 @@ namespace NuGet.Packaging.Signing
         public override byte[] GetSignatureValue()
         {
 #if IS_DESKTOP
-            using (var nativeCms = NativeCms.Decode(_primarySignature.GetBytes()))
-            {
-                return nativeCms.GetRepositoryCountersignatureSignatureValue();
-            }
+            return SignerInfo.GetSignature();
 #else
             throw new PlatformNotSupportedException();
 #endif
