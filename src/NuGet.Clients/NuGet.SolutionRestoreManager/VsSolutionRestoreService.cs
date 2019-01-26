@@ -26,7 +26,7 @@ namespace NuGet.SolutionRestoreManager
     [PartCreationPolicy(CreationPolicy.Shared)]
     [Export(typeof(IVsSolutionRestoreService))]
     [Export(typeof(IVsSolutionRestoreService2))]
-    public sealed class VsSolutionRestoreService : IVsSolutionRestoreService, IVsSolutionRestoreService2
+    public sealed class VsSolutionRestoreService : IVsSolutionRestoreService, IVsSolutionRestoreService2, IVsSolutionRestoreService3
     {
         private readonly IProjectSystemCache _projectSystemCache;
         private readonly ISolutionRestoreWorker _restoreWorker;
@@ -60,19 +60,48 @@ namespace NuGet.SolutionRestoreManager
 
         public Task<bool> NominateProjectAsync(string projectUniqueName, IVsProjectRestoreInfo projectRestoreInfo, CancellationToken token)
         {
+            return NominateProjectAsync(projectUniqueName, projectRestoreInfo, null, token);
+        }
+
+        public Task<bool> NominateProjectAsync(string projectUniqueName, IVsProjectRestoreInfo2 projectRestoreInfo, CancellationToken token)
+        {
+            return NominateProjectAsync(projectUniqueName, null, projectRestoreInfo, token);
+        }
+
+        /// <summary>
+        /// This is where the nominate calls for the IVs1 and IVS3 APIs combine. The reason for this method is to avoid duplication and potential issues 
+        /// The issue with this method is that it has some weird custom logging to ensure backward compatibility. It's on the implementer to ensure these calls are correct.
+        /// <param name="projectUniqueName">projectUniqueName</param>
+        /// <param name="projectRestoreInfo">projectRestoreInfo. Can be null</param>
+        /// <param name="projectRestoreInfo2">proectRestoreInfo2. Can be null</param>
+        /// <param name="token"></param>
+        /// <remarks>Only and exactly one of projectRestoreInfos can be null.</remarks>
+        /// <returns>The task that scheduled restore</returns>
+        private Task<bool> NominateProjectAsync(string projectUniqueName, IVsProjectRestoreInfo projectRestoreInfo, IVsProjectRestoreInfo2 projectRestoreInfo2, CancellationToken token)
+        {
             if (string.IsNullOrEmpty(projectUniqueName))
             {
                 throw new ArgumentException(Resources.Argument_Cannot_Be_Null_Or_Empty, nameof(projectUniqueName));
             }
 
-            if (projectRestoreInfo == null)
+            if (projectRestoreInfo == null && projectRestoreInfo2 == null)
             {
                 throw new ArgumentNullException(nameof(projectRestoreInfo));
             }
 
-            if (projectRestoreInfo.TargetFrameworks == null)
+            if (projectRestoreInfo != null)
             {
-                throw new InvalidOperationException("TargetFrameworks cannot be null.");
+                if (projectRestoreInfo.TargetFrameworks == null)
+                {
+                    throw new InvalidOperationException("TargetFrameworks cannot be null.");
+                }
+            }
+            else
+            {
+                if (projectRestoreInfo2.TargetFrameworks == null)
+                {
+                    throw new InvalidOperationException("TargetFrameworks cannot be null.");
+                }
             }
 
             try
@@ -82,7 +111,10 @@ namespace NuGet.SolutionRestoreManager
 
                 var projectNames = ProjectNames.FromFullProjectPath(projectUniqueName);
 
-                var dgSpec = ToDependencyGraphSpec(projectNames, projectRestoreInfo);
+                var dgSpec = projectRestoreInfo != null ?
+                    ToDependencyGraphSpec(projectNames, projectRestoreInfo) :
+                    null; // TODO NK - Implement the ToDependencyGraphSpec for IVSProjectRestoreInfo2
+
                 _projectSystemCache.AddProjectRestoreInfo(projectNames, dgSpec);
 
                 // returned task completes when scheduled restore operation completes.
@@ -189,6 +221,6 @@ namespace NuGet.SolutionRestoreManager
             };
 
             return packageSpec;
-        }        
+        }
     }
 }
